@@ -269,6 +269,28 @@ export function injectCrashProtection(htmlContent: string): string {
       }, 3200);
     }
 
+    // In-game score and progress reporting APIs
+    window.SphereArcade = {
+      saveScore: function(val) {
+        var num = Number(val);
+        if (!isNaN(num) && num > 0) {
+          window.parent.postMessage({ type: 'ARCADE_SCORE', score: num }, '*');
+          showGameToast('🏆 Score Saved: ' + num);
+        }
+      },
+      saveProgress: function(level, score, checkpoint) {
+        window.parent.postMessage({ 
+          type: 'ARCADE_SAVE_PROGRESS', 
+          level: Number(level) || 1, 
+          score: Number(score) || 0,
+          checkpoints: typeof checkpoint === 'string' ? checkpoint : (checkpoint ? JSON.stringify(checkpoint) : undefined)
+        }, '*');
+        showGameToast('💾 Level Progress Saved');
+      }
+    };
+    window.saveScore = window.SphereArcade.saveScore;
+    window.saveProgress = window.SphereArcade.saveProgress;
+
     // 3. Graceful in-game crash UI handler
     window.__showArcadeCrashUI = function(errorMsg) {
       var existing = document.getElementById('spherestrike-crash-overlay');

@@ -23,6 +23,7 @@ interface GamePlayerProps {
   isAdmin?: boolean;
   currentUser?: User | null;
   onOpenLogin?: () => void;
+  onOpenSignup?: () => void;
 }
 
 export const GamePlayer: React.FC<GamePlayerProps> = ({
@@ -35,6 +36,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   isAdmin = false,
   currentUser = null,
   onOpenLogin,
+  onOpenSignup,
 }) => {
   const [selectedVersion, setSelectedVersion] = useState<string>(game.currentVersion);
   const [activeCode, setActiveCode] = useState<string>(game.code);

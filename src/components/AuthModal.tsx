@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { X, Lock, Mail, User as UserIcon, LogIn, UserPlus, Sparkles, CheckCircle2, Cloud, Trophy, Gamepad2 } from 'lucide-react';
+import { X, Lock, Mail, User as UserIcon, LogIn, UserPlus, Sparkles, CheckCircle2, Cloud, Trophy, Gamepad2, ShieldCheck, KeyRound } from 'lucide-react';
 import { User, AuthMode } from '../types/user';
 import { loginUser, registerUser } from '../utils/auth';
-import { migrateGuestProgressToUser } from '../utils/progress';
+import { migrateGuestProgressToUser, hydrateUserProgressFromServer } from '../utils/progress';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -23,6 +23,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [username, setUsername] = useState<string>('');
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
+  const [isAdminRegister, setIsAdminRegister] = useState<boolean>(false);
+  const [adminPasskey, setAdminPasskey] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
@@ -54,7 +56,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
       setIsLoading(true);
       try {
-        const user = await registerUser(username, email, password);
+        const user = await registerUser(
+          username, 
+          email, 
+          password, 
+          adminPasskey.trim() || undefined,
+          isAdminRegister || username.toLowerCase().includes('admin')
+        );
+        hydrateUserProgressFromServer(user);
         migrateGuestProgressToUser(user.id);
         setIsLoading(false);
         onSuccess(user);
@@ -78,6 +87,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setIsLoading(true);
       try {
         const user = await loginUser(identifier, password);
+        hydrateUserProgressFromServer(user);
         migrateGuestProgressToUser(user.id);
         setIsLoading(false);
         onSuccess(user);
@@ -248,6 +258,42 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               />
             </div>
           </div>
+
+          {/* Optional Admin Account Creation */}
+          {mode === 'signup' && (
+            <div className="pt-1 border-t border-white/[0.06] space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-slate-300 hover:text-white">
+                <input
+                  type="checkbox"
+                  checked={isAdminRegister}
+                  onChange={(e) => setIsAdminRegister(e.target.checked)}
+                  className="rounded border-white/[0.2] bg-white/[0.05] text-amber-500 focus:ring-0 cursor-pointer"
+                />
+                <span className="flex items-center gap-1.5 font-semibold">
+                  <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Create as Administrator Account</span>
+                </span>
+              </label>
+
+              {isAdminRegister && (
+                <div className="space-y-1 pl-5 animate-in fade-in">
+                  <div className="relative">
+                    <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-amber-400" />
+                    <input
+                      type="password"
+                      value={adminPasskey}
+                      onChange={(e) => setAdminPasskey(e.target.value)}
+                      placeholder="Enter Admin Passkey (e.g. MacBookAir)"
+                      className="w-full pl-9 pr-3 py-2 rounded-xl bg-amber-950/20 border border-amber-500/40 text-amber-200 placeholder:text-amber-500/50 text-xs focus:outline-none focus:border-amber-400"
+                    />
+                  </div>
+                  <p className="text-[10px] text-amber-400/80">
+                    Grants full admin moderation clearance & AI security account monitoring.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Submit Button */}
           <button

@@ -4,6 +4,8 @@ export interface User {
   email: string;
   password?: string;
   avatarUrl?: string;
+  isAdmin?: boolean;
+  role?: 'admin' | 'user';
   joinedAt: string;
   lastLoginAt?: string;
   gamesPlayed?: number;

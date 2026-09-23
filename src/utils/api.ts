@@ -395,17 +395,33 @@ export async function checkAccountStatus(userId: string): Promise<{ isBlocked: b
   return { isBlocked: false, blocked: false };
 }
 
-export async function registerAccountApi(username: string, email: string, password: string): Promise<User> {
+export async function registerAccountApi(
+  username: string, 
+  email: string, 
+  password: string,
+  adminPasskey?: string,
+  makeAdmin?: boolean
+): Promise<User> {
   const res = await fetch('/api/auth/register', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, email, password })
+    body: JSON.stringify({ username, email, password, adminPasskey, makeAdmin })
   });
   const data = await res.json();
   if (!res.ok || !data.success) {
     throw new Error(data.message || 'Registration failed.');
   }
   return data.user;
+}
+
+export async function deleteUserAccountApi(userId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/users/${userId}`, { method: 'DELETE' });
+    const data = await res.json();
+    return Boolean(res.ok && data.success);
+  } catch {
+    return false;
+  }
 }
 
 export async function loginAccountApi(identifier: string, password: string): Promise<User> {

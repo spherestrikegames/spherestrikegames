@@ -1,4 +1,5 @@
 import { GameProgress, UserArcadeStats, ArcadeAchievement } from '../types/progress';
+import { User } from '../types/user';
 
 const PROGRESS_STORAGE_PREFIX = 'spherestrike_progress_';
 const GUEST_TEMP_STORAGE = 'spherestrike_guest_temp_progress';
@@ -242,3 +243,72 @@ export function calculateUserArcadeStats(userId: string): UserArcadeStats {
     achievements
   };
 }
+
+export function hydrateUserProgressFromServer(user: User): void {
+  if (!user || !user.id) return;
+  try {
+    const existing = getAllUserProgress(user.id);
+    const existingMap = new Map(existing.map(p => [p.gameId, p]));
+    let modified = false;
+
+    if (user.savedProgress && typeof user.savedProgress === 'object') {
+      for (const [gameId, progressData] of Object.entries(user.savedProgress)) {
+        if (!existingMap.has(gameId)) {
+          existingMap.set(gameId, {
+            gameId,
+            gameTitle: progressData.gameTitle || 'Arcade Game',
+            highScore: Number(progressData.highScore || (user.highScores?.[gameId] || 0)),
+            levelReached: Number(progressData.levelReached || 1),
+            totalPlayTimeSeconds: Number(progressData.totalPlayTimeSeconds || 0),
+            sessionsCount: Number(progressData.sessionsCount || 1),
+            lastPlayedAt: progressData.lastPlayedAt || new Date().toISOString(),
+            checkpoints: progressData.checkpoints,
+            savedData: progressData.savedData
+          });
+          modified = true;
+        } else {
+          const curr = existingMap.get(gameId)!;
+          if (progressData.highScore && Number(progressData.highScore) > curr.highScore) {
+            curr.highScore = Number(progressData.highScore);
+            modified = true;
+          }
+          if (progressData.levelReached && Number(progressData.levelReached) > curr.levelReached) {
+            curr.levelReached = Number(progressData.levelReached);
+            modified = true;
+          }
+        }
+      }
+    }
+
+    if (user.highScores && typeof user.highScores === 'object') {
+      for (const [gameId, score] of Object.entries(user.highScores)) {
+        const numScore = Number(score);
+        if (existingMap.has(gameId)) {
+          const curr = existingMap.get(gameId)!;
+          if (numScore > curr.highScore) {
+            curr.highScore = numScore;
+            modified = true;
+          }
+        } else {
+          existingMap.set(gameId, {
+            gameId,
+            gameTitle: 'Arcade Game',
+            highScore: numScore,
+            levelReached: 1,
+            totalPlayTimeSeconds: 0,
+            sessionsCount: 1,
+            lastPlayedAt: new Date().toISOString()
+          });
+          modified = true;
+        }
+      }
+    }
+
+    if (modified || existingMap.size > 0) {
+      localStorage.setItem(getUserProgressKey(user.id), JSON.stringify(Array.from(existingMap.values())));
+    }
+  } catch (err) {
+    console.error('Failed to hydrate progress from server:', err);
+  }
+}
+

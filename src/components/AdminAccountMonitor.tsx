@@ -2,13 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   ShieldAlert, ShieldCheck, Lock, Unlock, RefreshCw, Sparkles, 
   Search, Filter, UserX, UserCheck, AlertTriangle, Clock, 
-  Zap, CheckCircle2, AlertOctagon, Info, Database, Download, Upload, HardDrive
+  Zap, CheckCircle2, AlertOctagon, Info, Database, Download, Upload, HardDrive, Trash2
 } from 'lucide-react';
 import { User } from '../types/user';
 import { AiAuditReport } from '../types/admin';
 import { 
   fetchAllUsers, blockUserAccount, unblockUserAccount, 
-  triggerAiSecurityAudit, fetchAiAuditStatus, exportAccountsBackupApi, importAccountsBackupApi 
+  triggerAiSecurityAudit, fetchAiAuditStatus, exportAccountsBackupApi, importAccountsBackupApi,
+  deleteUserAccountApi 
 } from '../utils/api';
 
 export const AdminAccountMonitor: React.FC = () => {
@@ -126,6 +127,20 @@ export const AdminAccountMonitor: React.FC = () => {
     }));
     setActionNotice('Flag dismissed for account.');
     setTimeout(() => setActionNotice(null), 3000);
+  };
+
+  const handleDeleteAccount = async (userId: string, username: string) => {
+    if (window.confirm(`Permanently delete account @${username}? This action cannot be undone.`)) {
+      const ok = await deleteUserAccountApi(userId);
+      if (ok) {
+        setUsers(prev => prev.filter(u => u.id !== userId));
+        setActionNotice(`Account @${username} was deleted.`);
+        setTimeout(() => setActionNotice(null), 3500);
+      } else {
+        setActionNotice(`Failed to delete account @${username}.`);
+        setTimeout(() => setActionNotice(null), 3500);
+      }
+    }
   };
 
   // Export all accounts JSON backup for saving lots of accounts data
@@ -647,6 +662,15 @@ export const AdminAccountMonitor: React.FC = () => {
                           >
                             <Lock className="w-3.5 h-3.5" />
                             <span>Block Account</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteAccount(user.id, user.username)}
+                            className="p-1.5 rounded-xl bg-red-950/40 hover:bg-rose-600 text-rose-400 hover:text-white border border-rose-500/30 text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                            title={`Permanently delete @${user.username}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         </>
                       )}

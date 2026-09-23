@@ -82,10 +82,14 @@ export default function App() {
   const handleLogout = () => {
     logoutUser();
     setCurrentUser(null);
+    handleLockAdmin();
   };
 
   const handleAuthSuccess = (user: User) => {
     setCurrentUser(user);
+    if (user.isAdmin || user.role === 'admin' || user.username.toLowerCase().includes('admin')) {
+      handleUnlockAdmin();
+    }
   };
 
   // Admin Mode state (unlocked via secret code "MacBook Air" at bottom of main menu)

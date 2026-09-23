@@ -1,15 +1,1 @@
-[
-  {
-    "id": "user-admin-001",
-    "username": "Rishi_admin",
-    "email": "rishi.p1.goyal@gmail.com",
-    "joinedAt": "2026-08-24T14:27:08.670Z",
-    "gamesPlayed": 142,
-    "gamesCreatedCount": 5,
-    "isBlocked": false,
-    "isFlagged": false,
-    "suspiciousScore": 0,
-    "aiRiskCategory": "Clean Verified Administrator",
-    "aiExplanation": "System Administrator account. No anomalies or malicious activity detected."
-  }
-]
+[]

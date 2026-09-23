@@ -39,10 +39,16 @@ export function setCurrentUser(user: User | null): void {
   }
 }
 
-// Real Server Registration for lots of accounts
-export async function registerUser(username: string, email: string, password?: string): Promise<User> {
+// Real Server Registration for accounts
+export async function registerUser(
+  username: string, 
+  email: string, 
+  password?: string,
+  adminPasskey?: string,
+  makeAdmin?: boolean
+): Promise<User> {
   const pwd = password || 'SphereUser2026!';
-  const user = await registerAccountApi(username, email, pwd);
+  const user = await registerAccountApi(username, email, pwd, adminPasskey, makeAdmin);
   setCurrentUser(user);
   return user;
 }
