@@ -1,0 +1,6 @@
+{
+  "name": "Sphere Strike Games",
+  "description": "Community web arcade inspired by CrazyGames. Upload, play, and update web games with frosted glass design and instant versioning.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
