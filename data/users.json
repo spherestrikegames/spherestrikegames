@@ -3,9 +3,9 @@
     "id": "user-mue86a4c-ptjp",
     "username": "Rishi_admin",
     "email": "goyal.rishi730@gmail.com",
-    "password": "macbookair",
+    "password": "MacBookair",
     "joinedAt": "2026-09-23T14:55:36.636Z",
-    "lastLoginAt": "2026-09-23T22:54:26.286Z",
+    "lastLoginAt": "2026-09-23T23:23:12.893Z",
     "gamesPlayed": 0,
     "gamesCreatedCount": 0,
     "highScores": {},
@@ -19,6 +19,28 @@
     "role": "admin",
     "aiRiskCategory": "Clean Verified Administrator",
     "aiExplanation": "System Administrator account. No anomalies or malicious activity detected.",
-    "lastAiAuditAt": "2026-09-23T22:57:45.627Z"
+    "lastAiAuditAt": "2026-09-23T23:23:07.463Z",
+    "lastActiveView": "arcade"
+  },
+  {
+    "id": "user-mueqaz0c-jngn",
+    "username": "spamer",
+    "email": "hehe@meme.com",
+    "password": "1234",
+    "joinedAt": "2026-09-23T23:23:08.604Z",
+    "lastLoginAt": "2026-09-23T23:23:08.604Z",
+    "gamesPlayed": 0,
+    "gamesCreatedCount": 0,
+    "highScores": {},
+    "savedProgress": {},
+    "favoriteGameIds": [],
+    "createdGameIds": [],
+    "isBlocked": false,
+    "isFlagged": false,
+    "suspiciousScore": 0,
+    "isAdmin": false,
+    "role": "user",
+    "aiRiskCategory": "New User",
+    "aiExplanation": "Newly created player account."
   }
 ]

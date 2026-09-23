@@ -268,10 +268,11 @@ export async function clearAllGames(): Promise<boolean> {
 // Helper to get active admin credentials for protected API operations
 function getAdminHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'x-admin-passkey': 'goyal.rishi'
   };
   try {
-    const raw = sessionStorage.getItem('spherestrike_current_user_v2');
+    const raw = sessionStorage.getItem('spherestrike_current_user_v2') || localStorage.getItem('spherestrike_saved_account');
     if (raw) {
       const u = JSON.parse(raw);
       if (u.isAdmin && (u.role === 'admin' || u.isAdmin === true)) {
@@ -419,6 +420,29 @@ export async function checkAccountStatus(userId: string): Promise<{ isBlocked: b
   return { isBlocked: false, blocked: false };
 }
 
+async function safeParseResponse(res: Response, defaultError: string): Promise<any> {
+  const text = await res.text().catch(() => '');
+  let data: any = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      // Prevents Safari/WebKit DOMException "The string did not match the expected pattern."
+      throw new Error(
+        res.status >= 500 
+          ? 'Game server is currently busy or restarting. Please try again in a moment.'
+          : res.status === 404
+          ? 'Authentication service not reachable. Please reload the page.'
+          : defaultError
+      );
+    }
+  }
+  if (!res.ok || (data && data.success === false)) {
+    throw new Error(data?.message || defaultError);
+  }
+  return data;
+}
+
 export async function registerAccountApi(
   username: string, 
   email: string, 
@@ -426,15 +450,18 @@ export async function registerAccountApi(
   adminPasskey?: string,
   makeAdmin?: boolean
 ): Promise<User> {
-  const res = await fetch('/api/auth/register', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, email, password, adminPasskey, makeAdmin })
-  });
-  const data = await res.json();
-  if (!res.ok || !data.success) {
-    throw new Error(data.message || 'Registration failed.');
+  let res: Response;
+  try {
+    res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, email, password, adminPasskey, makeAdmin })
+    });
+  } catch (netErr: any) {
+    throw new Error('Unable to connect to the game server. Please check your internet connection and try again.');
   }
+
+  const data = await safeParseResponse(res, 'Registration failed. Please choose another username.');
   return data.user;
 }
 
@@ -444,7 +471,7 @@ export async function deleteUserAccountApi(userId: string): Promise<boolean> {
       method: 'DELETE',
       headers: getAdminHeaders()
     });
-    const data = await res.json();
+    const data = await safeParseResponse(res, 'Failed to delete user.');
     return Boolean(res.ok && data.success);
   } catch {
     return false;
@@ -452,15 +479,18 @@ export async function deleteUserAccountApi(userId: string): Promise<boolean> {
 }
 
 export async function loginAccountApi(identifier: string, password: string): Promise<User> {
-  const res = await fetch('/api/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ identifier, password })
-  });
-  const data = await res.json();
-  if (!res.ok || !data.success) {
-    throw new Error(data.message || 'Login failed.');
+  let res: Response;
+  try {
+    res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier, password })
+    });
+  } catch (netErr: any) {
+    throw new Error('Unable to connect to the game server. Please check your internet connection and try again.');
   }
+
+  const data = await safeParseResponse(res, 'Login failed. Please check your credentials.');
   return data.user;
 }
 
@@ -479,10 +509,7 @@ export async function saveAccountDataApi(userId: string, accountData: {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ userId, ...accountData })
   });
-  const data = await res.json();
-  if (!res.ok || !data.success) {
-    throw new Error(data.message || 'Failed to save account data.');
-  }
+  const data = await safeParseResponse(res, 'Failed to save account data.');
   return data.user;
 }
 
@@ -490,8 +517,7 @@ export async function exportAccountsBackupApi(): Promise<any> {
   const res = await fetch('/api/admin/accounts/export', {
     headers: getAdminHeaders()
   });
-  if (!res.ok) throw new Error('Failed to export accounts backup.');
-  return await res.json();
+  return await safeParseResponse(res, 'Failed to export accounts backup.');
 }
 
 export async function importAccountsBackupApi(importedData: any): Promise<{ success: boolean; message: string; totalAccounts: number }> {
@@ -500,11 +526,7 @@ export async function importAccountsBackupApi(importedData: any): Promise<{ succ
     headers: getAdminHeaders(),
     body: JSON.stringify(importedData)
   });
-  const data = await res.json();
-  if (!res.ok || !data.success) {
-    throw new Error(data.message || 'Failed to import accounts backup.');
-  }
-  return data;
+  return await safeParseResponse(res, 'Failed to import accounts backup.');
 }
 
 

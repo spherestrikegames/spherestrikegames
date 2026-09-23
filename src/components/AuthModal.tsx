@@ -64,14 +64,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           adminPasskey.trim() || undefined,
           isAdminRegister
         );
-        hydrateUserProgressFromServer(user);
-        migrateGuestProgressToUser(user.id);
+        try {
+          hydrateUserProgressFromServer(user);
+        } catch (e) {
+          console.warn('Hydration skipped:', e);
+        }
+        try {
+          migrateGuestProgressToUser(user.id);
+        } catch (e) {
+          console.warn('Guest migration skipped:', e);
+        }
         setIsLoading(false);
         onSuccess(user);
         onClose();
       } catch (err: any) {
         setIsLoading(false);
-        setErrorMsg(err.message || 'Registration failed.');
+        let msg = err?.message || 'Registration failed.';
+        if (msg.includes('The string did not match the expected pattern')) {
+          msg = 'Registration error. Please check your gamer tag format and try again.';
+        }
+        setErrorMsg(msg);
       }
     } else {
       // Login
@@ -88,14 +100,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setIsLoading(true);
       try {
         const user = await loginUser(identifier, password);
-        hydrateUserProgressFromServer(user);
-        migrateGuestProgressToUser(user.id);
+        try {
+          hydrateUserProgressFromServer(user);
+        } catch (e) {
+          console.warn('Hydration skipped:', e);
+        }
+        try {
+          migrateGuestProgressToUser(user.id);
+        } catch (e) {
+          console.warn('Guest migration skipped:', e);
+        }
         setIsLoading(false);
         onSuccess(user);
         onClose();
       } catch (err: any) {
         setIsLoading(false);
-        setErrorMsg(err.message || 'Authentication failed. Please check your credentials.');
+        let msg = err?.message || 'Authentication failed. Please check your credentials.';
+        if (msg.includes('The string did not match the expected pattern')) {
+          msg = 'Incorrect gamer tag or password. Please check your credentials and try again.';
+        }
+        setErrorMsg(msg);
       }
     }
   };

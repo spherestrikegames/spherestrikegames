@@ -45,9 +45,13 @@ export function getAllUserProgress(userId: string): GameProgress[] {
   try {
     const raw = localStorage.getItem(getUserProgressKey(userId));
     if (!raw) return [];
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
   } catch (err) {
-    console.error('Failed to load user progress:', err);
+    console.warn('Failed to load user progress:', err);
+    try {
+      localStorage.removeItem(getUserProgressKey(userId));
+    } catch {}
     return [];
   }
 }
@@ -186,7 +190,17 @@ export function migrateGuestProgressToUser(userId: string): number {
   try {
     const raw = sessionStorage.getItem(GUEST_TEMP_STORAGE);
     if (!raw) return 0;
-    const map: Record<string, Partial<GameProgress> & { lastUpdated?: number }> = JSON.parse(raw);
+    let map: Record<string, Partial<GameProgress> & { lastUpdated?: number }>;
+    try {
+      map = JSON.parse(raw);
+    } catch {
+      sessionStorage.removeItem(GUEST_TEMP_STORAGE);
+      return 0;
+    }
+    if (!map || typeof map !== 'object') {
+      sessionStorage.removeItem(GUEST_TEMP_STORAGE);
+      return 0;
+    }
     let count = 0;
 
     for (const [gameId, guestData] of Object.entries(map)) {

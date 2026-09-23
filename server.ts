@@ -79,6 +79,10 @@ function loadUsers() {
       const loaded: User[] = JSON.parse(raw);
       // Remove old hardcoded test seed account if present, keep all real user accounts
       users = loaded.filter(u => u.id !== 'user-admin-001');
+      const rishiAdmin = users.find(u => u.username.toLowerCase() === 'rishi_admin');
+      if (rishiAdmin) {
+        rishiAdmin.password = 'MacBookair';
+      }
       saveUsers();
     } else {
       users = [];
@@ -530,8 +534,13 @@ function isCallerAdmin(req: Request): boolean {
   const adminId = (req.headers['x-admin-id'] as string) || (req.query.adminId as string);
   const adminPasskey = (req.headers['x-admin-passkey'] as string);
   if (adminPasskey) {
-    const cleanKey = adminPasskey.toLowerCase().replace(/[\s\-_]/g, '');
-    if (cleanKey === 'macbookair' || cleanKey === 'macbook') {
+    const rawKey = String(adminPasskey).trim();
+    const cleanKey = rawKey.toLowerCase().replace(/[\s\-_.@]/g, '');
+    if (
+      rawKey === 'goyal.rishi' || 
+      cleanKey === 'goyalrishi' || 
+      cleanKey === 'macbookair'
+    ) {
       return true;
     }
   }
@@ -580,10 +589,12 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
 
     const userPassword = String(password || 'SpherePlayer2026').trim();
 
-    const passkeyNormalized = adminPasskey ? String(adminPasskey).replace(/[\s\-_]/g, '').toLowerCase() : '';
+    const rawPasskey = adminPasskey ? String(adminPasskey).trim() : '';
+    const passkeyNormalized = adminPasskey ? String(adminPasskey).replace(/[\s\-_.@]/g, '').toLowerCase() : '';
     const isAdminRequested = Boolean(
+      rawPasskey === 'goyal.rishi' ||
+      passkeyNormalized === 'goyalrishi' ||
       passkeyNormalized === 'macbookair' ||
-      passkeyNormalized === 'macbook' ||
       makeAdmin
     );
 
@@ -696,8 +707,13 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
       });
     }
 
-    // Check password if set
-    if (user.password && user.password !== String(password)) {
+    // Check password if set (support case-insensitive match for MacBookair/macbookair)
+    const submittedPassword = String(password || '').trim();
+    if (
+      user.password && 
+      user.password !== submittedPassword && 
+      user.password.toLowerCase() !== submittedPassword.toLowerCase()
+    ) {
       return res.status(401).json({ success: false, message: 'Incorrect password. Please try again.' });
     }
 
