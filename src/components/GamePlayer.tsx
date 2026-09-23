@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   ArrowLeft, Maximize2, Minimize2, RotateCcw, ThumbsUp, Star, 
-  Share2, Code, History, MessageSquare, Check, Sparkles, AlertCircle, Eye, ShieldCheck, Play, Heart, ChevronDown, Trash2
+  Share2, Code, History, MessageSquare, Check, Sparkles, AlertCircle, Eye, ShieldCheck, Play, Heart, ChevronDown, Trash2, ExternalLink, Globe
 } from 'lucide-react';
 import { Game, GameVersion, GameComment } from '../types/game';
 import { trackGamePlay, likeGame, addComment } from '../utils/api';
@@ -202,6 +202,20 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                   {isTheater ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
                 </button>
 
+                {/* External Link if linked game */}
+                {game.embedUrl && (
+                  <a
+                    href={game.embedUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Open game directly in a new tab"
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer flex items-center gap-1 text-xs"
+                  >
+                    <ExternalLink className="w-4 h-4 text-blue-400" />
+                    <span className="hidden sm:inline text-blue-300">Open Tab</span>
+                  </a>
+                )}
+
                 {/* True Fullscreen Toggle */}
                 <button
                   onClick={handleToggleFullscreen}
@@ -215,16 +229,47 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
             {/* Sandboxed Game Frame */}
             <div className="relative w-full aspect-[16/10] sm:aspect-video bg-[#080c16] flex items-center justify-center overflow-hidden">
-              <iframe
-                ref={iframeRef}
-                key={selectedVersion}
-                srcDoc={activeCode}
-                title={game.title}
-                sandbox="allow-scripts allow-modals allow-same-origin allow-pointer-lock"
-                className="w-full h-full border-0 block"
-                allow="autoplay; fullscreen; gamepad"
-              />
+              {game.embedUrl ? (
+                <iframe
+                  ref={iframeRef}
+                  key={selectedVersion + '-' + game.embedUrl}
+                  src={game.embedUrl}
+                  title={game.title}
+                  sandbox="allow-scripts allow-modals allow-same-origin allow-pointer-lock allow-forms allow-popups allow-fullscreen allow-orientation-lock allow-presentation"
+                  className="w-full h-full border-0 block bg-black"
+                  allow="autoplay; fullscreen; gamepad; accelerometer; gyroscope; screen-wake-lock; xr-spatial-tracking"
+                />
+              ) : (
+                <iframe
+                  ref={iframeRef}
+                  key={selectedVersion}
+                  srcDoc={activeCode}
+                  title={game.title}
+                  sandbox="allow-scripts allow-modals allow-same-origin allow-pointer-lock"
+                  className="w-full h-full border-0 block"
+                  allow="autoplay; fullscreen; gamepad"
+                />
+              )}
             </div>
+
+            {/* External link status bar if embedded */}
+            {game.embedUrl && (
+              <div className="px-4 py-2 bg-slate-900/60 border-t border-white/[0.06] flex items-center justify-between text-xs text-slate-400">
+                <div className="flex items-center gap-2 truncate">
+                  <Globe className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                  <span className="truncate">Playing from: <strong className="text-slate-300 font-mono text-[11px]">{game.embedUrl}</strong></span>
+                </div>
+                <a
+                  href={game.embedUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1 ml-3 shrink-0"
+                >
+                  <span>Direct Window</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            )}
           </div>
 
           {/* Game Title, Creator & Primary Action Bar */}

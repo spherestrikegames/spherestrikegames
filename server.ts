@@ -69,14 +69,17 @@ app.get('/api/games/:id', (req: Request, res: Response) => {
 app.post('/api/games', (req: Request, res: Response) => {
   try {
     const body = req.body;
-    if (!body.title || !body.code) {
-      return res.status(400).json({ success: false, message: 'Title and game code are required' });
+    if (!body.title || (!body.code && !body.embedUrl)) {
+      return res.status(400).json({ success: false, message: 'Game name and either game link or code are required' });
     }
 
     const newId = 'game-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
     const slug = body.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') + '-' + Date.now().toString(36);
     const now = new Date().toISOString();
     const version = body.version || '1.0.0';
+    const embedUrl = body.embedUrl ? String(body.embedUrl).trim() : undefined;
+    const code = body.code || (embedUrl ? `<iframe src="${embedUrl}" style="width:100%;height:100%;border:none;" allow="autoplay; fullscreen; gamepad" allowfullscreen></iframe>` : '');
+    const gameType = embedUrl ? 'embed' : (body.type || 'html5');
 
     const newGame: Game = {
       id: newId,
@@ -91,14 +94,14 @@ app.post('/api/games', (req: Request, res: Response) => {
         {
           version: version,
           changelog: body.changelog || 'Initial community upload.',
-          code: body.code,
+          code: code,
           createdAt: now,
           author: body.author || 'Anonymous Creator'
         }
       ],
-      code: body.code,
-      type: body.type || 'html5',
-      embedUrl: body.embedUrl,
+      code: code,
+      type: gameType,
+      embedUrl: embedUrl,
       thumbnailGradient: body.thumbnailGradient || 'from-blue-950 via-slate-900 to-black',
       accentColor: body.accentColor || '#3b82f6',
       iconName: body.iconName || 'Gamepad2',
@@ -146,11 +149,13 @@ app.put('/api/games/:id', (req: Request, res: Response) => {
     const body = req.body;
     const now = new Date().toISOString();
     const newVersion = body.version || `1.${game.versions.length}.0`;
+    const embedUrl = body.embedUrl !== undefined ? (body.embedUrl ? String(body.embedUrl).trim() : undefined) : game.embedUrl;
+    const code = body.code || (embedUrl ? `<iframe src="${embedUrl}" style="width:100%;height:100%;border:none;" allow="autoplay; fullscreen; gamepad" allowfullscreen></iframe>` : game.code);
 
     const versionEntry = {
       version: newVersion,
       changelog: body.changelog || 'Updated gameplay and polish.',
-      code: body.code || game.code,
+      code: code,
       createdAt: now,
       author: body.author || game.author
     };
@@ -162,7 +167,9 @@ app.put('/api/games/:id', (req: Request, res: Response) => {
     if (body.tags) game.tags = body.tags;
     if (body.controls) game.controls = body.controls;
     game.currentVersion = newVersion;
-    game.code = body.code || game.code;
+    game.code = code;
+    game.embedUrl = embedUrl;
+    if (embedUrl) game.type = 'embed';
     game.versions.unshift(versionEntry);
     game.updatedAt = now;
 

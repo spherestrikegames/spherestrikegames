@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Star, Eye, Gamepad2, Rocket, LayoutGrid, Zap, Trophy, Compass, Heart, Users, Target, Boxes } from 'lucide-react';
+import { Play, Star, Eye, Gamepad2, Rocket, LayoutGrid, Zap, Trophy, Compass, Heart, Users, Target, Boxes, Globe } from 'lucide-react';
 import { Game } from '../types/game';
 
 interface GameCardProps {
@@ -67,6 +67,14 @@ export const GameCard: React.FC<GameCardProps> = ({
           <div className="absolute top-2 left-2 z-20 flex items-center gap-1 text-[10px] font-mono font-semibold text-emerald-300 bg-slate-950/85 backdrop-blur-md px-2 py-0.5 rounded-md border border-emerald-500/30">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
             <span>v{game.currentVersion}</span>
+          </div>
+        )}
+
+        {/* Web Link Badge */}
+        {game.embedUrl && !isRecentlyUpdated && (
+          <div className="absolute top-2 left-2 z-20 flex items-center gap-1 text-[10px] font-medium text-blue-300 bg-slate-950/85 backdrop-blur-md px-2 py-0.5 rounded-md border border-blue-500/30">
+            <Globe className="w-3 h-3 text-blue-400" />
+            <span>Web Link</span>
           </div>
         )}
 

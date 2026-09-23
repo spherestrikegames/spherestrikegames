@@ -49,6 +49,10 @@ export async function createGame(payload: Partial<Game> & { version?: string; ch
   // Client-side fallback
   const now = new Date().toISOString();
   const version = payload.version || '1.0.0';
+  const embedUrl = payload.embedUrl ? payload.embedUrl.trim() : undefined;
+  const code = payload.code || (embedUrl ? `<iframe src="${embedUrl}" style="width:100%;height:100%;border:none;" allow="autoplay; fullscreen; gamepad" allowfullscreen></iframe>` : '');
+  const gameType = embedUrl ? 'embed' : (payload.type || 'html5');
+
   const newGame: Game = {
     id: 'game-' + Date.now(),
     title: payload.title || 'Untitled Game',
@@ -62,13 +66,14 @@ export async function createGame(payload: Partial<Game> & { version?: string; ch
       {
         version: version,
         changelog: payload.changelog || 'Initial community upload.',
-        code: payload.code || '',
+        code: code,
         createdAt: now,
         author: payload.author || 'Sphere Creator'
       }
     ],
-    code: payload.code || '',
-    type: payload.type || 'html5',
+    code: code,
+    type: gameType,
+    embedUrl: embedUrl,
     thumbnailGradient: payload.thumbnailGradient || 'from-blue-950 via-slate-900 to-black',
     accentColor: payload.accentColor || '#3b82f6',
     iconName: payload.iconName || 'Gamepad2',
@@ -97,7 +102,9 @@ export async function updateGame(
     tags?: string[];
     version: string;
     changelog: string;
-    code: string;
+    code?: string;
+    embedUrl?: string;
+    type?: 'html5' | 'embed';
     author?: string;
     controls?: { key: string; action: string }[];
   }
@@ -125,18 +132,23 @@ export async function updateGame(
 
   const game = cached[gameIndex];
   const now = new Date().toISOString();
+  const embedUrl = payload.embedUrl !== undefined ? (payload.embedUrl ? payload.embedUrl.trim() : undefined) : game.embedUrl;
+  const code = payload.code || (embedUrl ? `<iframe src="${embedUrl}" style="width:100%;height:100%;border:none;" allow="autoplay; fullscreen; gamepad" allowfullscreen></iframe>` : game.code);
+
   game.title = payload.title || game.title;
   game.description = payload.description || game.description;
   if (payload.genre) game.genre = payload.genre;
   if (payload.tags) game.tags = payload.tags;
   if (payload.controls) game.controls = payload.controls;
   game.currentVersion = payload.version;
-  game.code = payload.code;
+  game.code = code;
+  game.embedUrl = embedUrl;
+  if (embedUrl) game.type = 'embed';
   game.updatedAt = now;
   game.versions.unshift({
     version: payload.version,
     changelog: payload.changelog,
-    code: payload.code,
+    code: code,
     createdAt: now,
     author: payload.author || game.author
   });
