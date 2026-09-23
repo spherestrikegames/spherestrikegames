@@ -13,9 +13,10 @@ import { UserProfileModal } from './components/UserProfileModal';
 import { SphereStrikeLogo } from './components/SphereStrikeLogo';
 import { Game, GameGenre } from './types/game';
 import { User, AuthMode } from './types/user';
-import { fetchAllGames, deleteGame, checkAccountStatus } from './utils/api';
+import { fetchAllGames, deleteGame, checkAccountStatus, saveAccountDataApi } from './utils/api';
 import { isUserCreatedGame, removeMyCreatedGameId } from './utils/myGames';
 import { getCurrentUser, logoutUser } from './utils/auth';
+import { hydrateUserProgressFromServer } from './utils/progress';
 import { 
   Sparkles, Flame, History, SearchX, Plus, RefreshCw, 
   Gamepad2, Heart, Award, ArrowRight, ChevronRight, Edit3, Grid3X3,
@@ -80,44 +81,80 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    // Save last played state before logging out so account keeps where you left off
+    if (currentUser) {
+      saveAccountDataApi(currentUser.id, {
+        favoriteGameIds: favoriteIds,
+        lastPlayedGameId: selectedGame?.id,
+        lastPlayedGameTitle: selectedGame?.title,
+        lastActiveView: currentView
+      }).catch(() => {});
+    }
     logoutUser();
     setCurrentUser(null);
-    handleLockAdmin();
+    setCurrentView('arcade');
+    setSelectedGame(null);
   };
 
   const handleAuthSuccess = (user: User) => {
     setCurrentUser(user);
-    if (user.isAdmin || user.role === 'admin' || user.username.toLowerCase().includes('admin')) {
-      handleUnlockAdmin();
+    hydrateUserProgressFromServer(user);
+
+    // Restore favorites from user account
+    if (Array.isArray(user.favoriteGameIds) && user.favoriteGameIds.length > 0) {
+      setFavoriteIds(user.favoriteGameIds);
+      localStorage.setItem('spherestrike_favs', JSON.stringify(user.favoriteGameIds));
+    }
+
+    // Restore exact account state where user left off
+    if (user.lastPlayedGameId) {
+      const match = games.find(g => g.id === user.lastPlayedGameId || g.slug === user.lastPlayedGameId);
+      if (match) {
+        setSelectedGame(match);
+        if (user.lastActiveView === 'player' || !user.lastActiveView) {
+          setCurrentView('player');
+        }
+      }
     }
   };
 
-  // Admin Mode state (unlocked via secret code "MacBook Air" at bottom of main menu)
-  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('spherestrike_admin_access') === 'true';
-    } catch {
-      return false;
-    }
-  });
+  // Strictly server-authenticated Admin access:
+  // Non-admin users or guests cannot see admin abilities or use admin abilities
+  const isAdmin = Boolean(
+    currentUser && 
+    currentUser.isAdmin === true && 
+    currentUser.role === 'admin' && 
+    !currentUser.isBlocked
+  );
 
   const handleUnlockAdmin = () => {
-    setIsAdmin(true);
-    try {
-      localStorage.setItem('spherestrike_admin_access', 'true');
-    } catch (err) {
-      console.error(err);
-    }
+    // Admin access is granted solely via authenticating into an admin account
   };
 
   const handleLockAdmin = () => {
-    setIsAdmin(false);
-    try {
-      localStorage.removeItem('spherestrike_admin_access');
-    } catch (err) {
-      console.error(err);
+    if (isAdmin) {
+      handleLogout();
     }
   };
+
+  // Restore state when user is loaded on initial startup
+  useEffect(() => {
+    if (currentUser) {
+      hydrateUserProgressFromServer(currentUser);
+      if (Array.isArray(currentUser.favoriteGameIds) && currentUser.favoriteGameIds.length > 0) {
+        setFavoriteIds(currentUser.favoriteGameIds);
+      }
+      if (currentUser.lastPlayedGameId && !selectedGame && games.length > 0) {
+        const match = games.find(g => g.id === currentUser.lastPlayedGameId || g.slug === currentUser.lastPlayedGameId);
+        if (match) {
+          setSelectedGame(match);
+          if (currentUser.lastActiveView === 'player') {
+            setCurrentView('player');
+          }
+        }
+      }
+    }
+  }, [currentUser?.id, games.length]);
 
   // Filters
   const [activeGenre, setActiveGenre] = useState<GameGenre>('All');
@@ -139,6 +176,9 @@ export default function App() {
     setFavoriteIds(prev => {
       const next = prev.includes(gameId) ? prev.filter(id => id !== gameId) : [...prev, gameId];
       localStorage.setItem('spherestrike_favs', JSON.stringify(next));
+      if (currentUser) {
+        saveAccountDataApi(currentUser.id, { favoriteGameIds: next }).catch(() => {});
+      }
       return next;
     });
   };
@@ -521,6 +561,42 @@ export default function App() {
                 </div>
               )}
 
+              {/* Logged-In User "Pick Up Where You Left Off" Banner */}
+              {currentUser && currentUser.lastPlayedGameId && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-emerald-950/40 via-cyan-950/30 to-slate-900/60 border border-emerald-500/30 shadow-lg shadow-emerald-950/20 animate-in fade-in">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400 shrink-0">
+                      <Gamepad2 className="w-5 h-5 text-emerald-400" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
+                        <span>Pick up where you left off</span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                          Saved Session
+                        </span>
+                      </p>
+                      <p className="text-[11px] text-slate-300">
+                        Continue playing <span className="text-emerald-300 font-semibold">{currentUser.lastPlayedGameTitle || 'your game'}</span> with your saved progress and checkpoints.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                    <button
+                      onClick={() => {
+                        const target = games.find(g => g.id === currentUser.lastPlayedGameId || g.slug === currentUser.lastPlayedGameId);
+                        if (target) {
+                          handleSelectGame(target);
+                        }
+                      }}
+                      className="px-4 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold shadow-md shadow-emerald-950/50 transition-all cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Gamepad2 className="w-3.5 h-3.5" />
+                      <span>Resume Game</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* 65 EQUAL SIZE SLOTS GRID (NO SPOTLIGHT GAMES - ALL SAME SIZE) */}
               <section className="space-y-4">
                 <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
@@ -593,13 +669,15 @@ export default function App() {
                 </div>
               </section>
 
-              {/* Secret Admin Access Terminal at the bottom of the main menu */}
-              <AdminSecretTerminal
-                isAdmin={isAdmin}
-                onUnlockAdmin={handleUnlockAdmin}
-                onLockAdmin={handleLockAdmin}
-                totalGamesCount={games.length}
-              />
+              {/* Secret Admin Moderation Terminal - strictly visible and accessible to verified admin accounts */}
+              {isAdmin && (
+                <AdminSecretTerminal
+                  isAdmin={isAdmin}
+                  onUnlockAdmin={handleUnlockAdmin}
+                  onLockAdmin={handleLockAdmin}
+                  totalGamesCount={games.length}
+                />
+              )}
             </div>
           )}
         </main>

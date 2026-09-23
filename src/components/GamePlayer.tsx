@@ -6,7 +6,7 @@ import {
 import { Game, GameVersion, GameComment } from '../types/game';
 import { User } from '../types/user';
 import { GameProgress } from '../types/progress';
-import { trackGamePlay, likeGame, addComment } from '../utils/api';
+import { trackGamePlay, likeGame, addComment, saveAccountDataApi } from '../utils/api';
 import { 
   getUserGameProgress, saveUserGameProgress, recordHighScore, 
   recordGameSessionPlay, setGuestSessionProgress 
@@ -74,15 +74,21 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   const iframeContainerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  // Reload progress if currentUser changes
+  // Reload progress if currentUser changes and sync last played game to cloud profile
   useEffect(() => {
     if (currentUser) {
       setProgress(getUserGameProgress(currentUser.id, game.id));
       if (!newCommentAuthor) setNewCommentAuthor(currentUser.username);
+      // Persist last played game so when returning to login, user gets right back to where they left off
+      saveAccountDataApi(currentUser.id, {
+        lastPlayedGameId: game.id,
+        lastPlayedGameTitle: game.title,
+        lastActiveView: 'player'
+      }).catch(() => {});
     } else {
       setProgress(null);
     }
-  }, [currentUser, game.id]);
+  }, [currentUser?.id, game.id]);
 
   // Track session playtime and auto-save for logged in users
   useEffect(() => {

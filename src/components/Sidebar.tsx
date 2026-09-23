@@ -278,28 +278,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {isOpen && <span>Sandbox Studio</span>}
             </button>
 
-            {/* Admin Mode Quick Access */}
-            <button
-              onClick={onOpenAdminTerminal}
-              title={isAdmin ? "Admin Security & Moderation Hub" : "Secret Admin Access"}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer ${
-                isAdmin
-                  ? 'bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-500/40 shadow-sm'
-                  : 'text-slate-400 hover:bg-white/[0.05] hover:text-slate-200'
-              }`}
-            >
-              <ShieldCheck className={`w-4 h-4 shrink-0 ${isAdmin ? 'text-emerald-400 animate-pulse' : 'text-slate-400'}`} />
-              {isOpen && (
-                <div className="flex items-center justify-between flex-1 overflow-hidden">
-                  <span className="truncate">{isAdmin ? 'Admin Sentinel' : 'Admin Terminal'}</span>
-                  {isAdmin && (
+            {/* Admin Mode Quick Access - only visible to active verified administrator */}
+            {isAdmin && (
+              <button
+                onClick={onOpenAdminTerminal}
+                title="Admin Security & Moderation Hub"
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-500/40 shadow-sm"
+              >
+                <ShieldCheck className="w-4 h-4 shrink-0 text-emerald-400 animate-pulse" />
+                {isOpen && (
+                  <div className="flex items-center justify-between flex-1 overflow-hidden">
+                    <span className="truncate">Admin Sentinel</span>
                     <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold uppercase">
                       AI Active
                     </span>
-                  )}
-                </div>
-              )}
-            </button>
+                  </div>
+                )}
+              </button>
+            )}
           </div>
 
           {/* Account Profile / Quick Join Section */}

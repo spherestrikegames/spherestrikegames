@@ -23,6 +23,9 @@ export interface User {
   aiRiskCategory?: string;
   aiExplanation?: string;
   lastAiAuditAt?: string;
+  lastPlayedGameId?: string;
+  lastPlayedGameTitle?: string;
+  lastActiveView?: string;
 }
 
 export type AuthMode = 'login' | 'signup';

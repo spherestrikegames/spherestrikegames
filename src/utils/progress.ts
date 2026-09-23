@@ -101,6 +101,8 @@ export function saveUserGameProgress(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         userId,
+        lastPlayedGameId: gameId,
+        lastPlayedGameTitle: target.gameTitle,
         highScores: updates.highScore !== undefined ? { [gameId]: updates.highScore } : undefined,
         savedProgress: {
           [gameId]: {
@@ -274,6 +276,21 @@ export function hydrateUserProgressFromServer(user: User): void {
           }
           if (progressData.levelReached && Number(progressData.levelReached) > curr.levelReached) {
             curr.levelReached = Number(progressData.levelReached);
+            modified = true;
+          }
+          if (progressData.checkpoints && progressData.checkpoints !== curr.checkpoints) {
+            curr.checkpoints = progressData.checkpoints;
+            modified = true;
+          }
+          if (progressData.savedData && typeof progressData.savedData === 'object') {
+            curr.savedData = { 
+              ...(curr.savedData && typeof curr.savedData === 'object' ? curr.savedData : {}), 
+              ...progressData.savedData 
+            };
+            modified = true;
+          }
+          if (progressData.totalPlayTimeSeconds && Number(progressData.totalPlayTimeSeconds) > curr.totalPlayTimeSeconds) {
+            curr.totalPlayTimeSeconds = Number(progressData.totalPlayTimeSeconds);
             modified = true;
           }
         }

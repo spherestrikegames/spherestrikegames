@@ -1,19 +1,14 @@
 import { User } from '../types/user';
 import { registerAccountApi, loginAccountApi, saveAccountDataApi } from './api';
 
-const SESSION_USER_KEY = 'spherestrike_active_session';
-const LEGACY_STORAGE_KEY = 'spherestrike_current_user';
+const SESSION_USER_KEY = 'spherestrike_current_user_v2';
+const SAVED_ACCOUNT_KEY = 'spherestrike_saved_account';
+const LAST_USERNAME_KEY = 'spherestrike_last_username';
 
-// Always defaults to NO account when a new link or browser is opened
+// Restores user account where they left off
 export function getCurrentUser(): User | null {
   try {
-    // Clean up any old sticky localStorage so no shared link defaults to an account
-    if (typeof window !== 'undefined' && localStorage.getItem(LEGACY_STORAGE_KEY)) {
-      localStorage.removeItem(LEGACY_STORAGE_KEY);
-    }
-
-    // Only load if explicitly logged in during THIS active browser tab session
-    const raw = sessionStorage.getItem(SESSION_USER_KEY);
+    const raw = sessionStorage.getItem(SESSION_USER_KEY) || localStorage.getItem(SAVED_ACCOUNT_KEY);
     if (!raw) return null;
     const user: User = JSON.parse(raw);
     if (user.isBlocked) {
@@ -30,9 +25,12 @@ export function setCurrentUser(user: User | null): void {
   try {
     if (user) {
       sessionStorage.setItem(SESSION_USER_KEY, JSON.stringify(user));
+      localStorage.setItem(SAVED_ACCOUNT_KEY, JSON.stringify(user));
+      localStorage.setItem(LAST_USERNAME_KEY, user.username);
     } else {
       sessionStorage.removeItem(SESSION_USER_KEY);
-      localStorage.removeItem(LEGACY_STORAGE_KEY);
+      localStorage.removeItem(SAVED_ACCOUNT_KEY);
+      localStorage.removeItem('spherestrike_admin_access');
     }
   } catch (err) {
     console.error('Failed to set current user:', err);
@@ -61,7 +59,7 @@ export async function loginUser(emailOrUsername: string, password?: string): Pro
   return user;
 }
 
-// Sync user account data (high scores, game saves, favorites) to server storage
+// Sync user account data (high scores, game saves, favorites, last played) to server storage
 export async function syncUserAccountData(
   userId: string, 
   data: {
@@ -70,6 +68,9 @@ export async function syncUserAccountData(
     favoriteGameIds?: string[];
     createdGameIds?: string[];
     gamesPlayed?: number;
+    lastPlayedGameId?: string;
+    lastPlayedGameTitle?: string;
+    lastActiveView?: string;
   }
 ): Promise<User | null> {
   try {

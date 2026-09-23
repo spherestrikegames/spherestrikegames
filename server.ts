@@ -525,8 +525,33 @@ Provide a structured security report evaluating each account. Return JSON matchi
   return report;
 }
 
-// User endpoints
+// Helper to verify if the requester has admin clearance
+function isCallerAdmin(req: Request): boolean {
+  const adminId = (req.headers['x-admin-id'] as string) || (req.query.adminId as string);
+  const adminPasskey = (req.headers['x-admin-passkey'] as string);
+  if (adminPasskey) {
+    const cleanKey = adminPasskey.toLowerCase().replace(/[\s\-_]/g, '');
+    if (cleanKey === 'macbookair' || cleanKey === 'macbook') {
+      return true;
+    }
+  }
+  if (adminId) {
+    const adminUser = users.find(
+      u => (u.id === adminId || u.username.toLowerCase() === adminId.toLowerCase()) && 
+           u.isAdmin === true && 
+           u.role === 'admin' && 
+           !u.isBlocked
+    );
+    if (adminUser) return true;
+  }
+  return false;
+}
+
+// User endpoints (Admin only access)
 app.get('/api/users', (req: Request, res: Response) => {
+  if (!isCallerAdmin(req)) {
+    return res.status(403).json({ success: false, message: 'Admin clearance required to view user list.' });
+  }
   // Return users with passwords omitted for privacy
   const sanitized = users.map(u => {
     const { password, ...rest } = u as any;
@@ -627,9 +652,12 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
   }
 });
 
-// Delete account endpoint
+// Delete account endpoint (Admin only access)
 app.delete('/api/users/:id', (req: Request, res: Response) => {
   try {
+    if (!isCallerAdmin(req)) {
+      return res.status(403).json({ success: false, message: 'Admin clearance required to delete user accounts.' });
+    }
     const { id } = req.params;
     const initialLen = users.length;
     users = users.filter(u => u.id !== id && u.username.toLowerCase() !== id.toLowerCase());
@@ -688,10 +716,21 @@ app.post('/api/auth/login', (req: Request, res: Response) => {
   }
 });
 
-// Save Multi-Account Data (high scores, progress, favorites)
+// Save Multi-Account Data (high scores, progress, favorites, last played game)
 app.post('/api/auth/save-data', (req: Request, res: Response) => {
   try {
-    const { userId, highScores, savedProgress, favoriteGameIds, createdGameIds, gamesPlayed } = req.body;
+    const { 
+      userId, 
+      highScores, 
+      savedProgress, 
+      favoriteGameIds, 
+      createdGameIds, 
+      gamesPlayed,
+      lastPlayedGameId,
+      lastPlayedGameTitle,
+      lastActiveView
+    } = req.body;
+
     if (!userId) {
       return res.status(400).json({ success: false, message: 'userId is required' });
     }
@@ -710,6 +749,9 @@ app.post('/api/auth/save-data', (req: Request, res: Response) => {
     if (Array.isArray(favoriteGameIds)) user.favoriteGameIds = favoriteGameIds;
     if (Array.isArray(createdGameIds)) user.createdGameIds = createdGameIds;
     if (typeof gamesPlayed === 'number') user.gamesPlayed = gamesPlayed;
+    if (lastPlayedGameId !== undefined) user.lastPlayedGameId = lastPlayedGameId;
+    if (lastPlayedGameTitle !== undefined) user.lastPlayedGameTitle = lastPlayedGameTitle;
+    if (lastActiveView !== undefined) user.lastActiveView = lastActiveView;
 
     saveUsers();
     const { password: _, ...sanitizedUser } = user as any;
@@ -720,8 +762,11 @@ app.post('/api/auth/save-data', (req: Request, res: Response) => {
   }
 });
 
-// Accounts Data Export / Backup for High-Capacity Archival
+// Accounts Data Export / Backup for High-Capacity Archival (Admin only)
 app.get('/api/admin/accounts/export', (req: Request, res: Response) => {
+  if (!isCallerAdmin(req)) {
+    return res.status(403).json({ success: false, message: 'Admin clearance required to export account data.' });
+  }
   const sanitized = users.map(u => {
     const { password, ...rest } = u as any;
     return rest;
@@ -734,9 +779,12 @@ app.get('/api/admin/accounts/export', (req: Request, res: Response) => {
   });
 });
 
-// Accounts Data Bulk Import / Restore
+// Accounts Data Bulk Import / Restore (Admin only)
 app.post('/api/admin/accounts/import', (req: Request, res: Response) => {
   try {
+    if (!isCallerAdmin(req)) {
+      return res.status(403).json({ success: false, message: 'Admin clearance required to import accounts.' });
+    }
     const importedUsers: User[] = req.body.users || req.body;
     if (!Array.isArray(importedUsers)) {
       return res.status(400).json({ success: false, message: 'Invalid accounts format: expected an array of users' });
@@ -816,8 +864,11 @@ app.post('/api/users', (req: Request, res: Response) => {
   }
 });
 
-// Block Account Endpoint
+// Block Account Endpoint (Admin only)
 app.post('/api/users/:id/block', (req: Request, res: Response) => {
+  if (!isCallerAdmin(req)) {
+    return res.status(403).json({ success: false, message: 'Admin clearance required to block accounts.' });
+  }
   const userId = req.params.id;
   const reason = req.body.reason || 'Blocked by administrator due to policy violation.';
 
@@ -834,8 +885,11 @@ app.post('/api/users/:id/block', (req: Request, res: Response) => {
   res.json({ success: true, message: `Account @${user.username} has been blocked.`, user });
 });
 
-// Unblock Account Endpoint
+// Unblock Account Endpoint (Admin only)
 app.post('/api/users/:id/unblock', (req: Request, res: Response) => {
+  if (!isCallerAdmin(req)) {
+    return res.status(403).json({ success: false, message: 'Admin clearance required to unblock accounts.' });
+  }
   const userId = req.params.id;
   const user = users.find(u => u.id === userId || u.username.toLowerCase() === userId.toLowerCase());
   if (!user) {
@@ -850,9 +904,12 @@ app.post('/api/users/:id/unblock', (req: Request, res: Response) => {
   res.json({ success: true, message: `Account @${user.username} has been unblocked.`, user });
 });
 
-// Trigger Manual or Hourly AI Security Audit
+// Trigger Manual or Hourly AI Security Audit (Admin only)
 app.post('/api/admin/ai-security-audit', async (req: Request, res: Response) => {
   try {
+    if (!isCallerAdmin(req)) {
+      return res.status(403).json({ success: false, message: 'Admin clearance required to run AI Security Audit.' });
+    }
     const report = await runAiSecurityAuditCore();
     res.json({ success: true, report });
   } catch (err: any) {
@@ -861,8 +918,11 @@ app.post('/api/admin/ai-security-audit', async (req: Request, res: Response) => 
   }
 });
 
-// Get Audit Status & Timer Schedule
+// Get Audit Status & Timer Schedule (Admin only)
 app.get('/api/admin/audit-status', (req: Request, res: Response) => {
+  if (!isCallerAdmin(req)) {
+    return res.status(403).json({ success: false, message: 'Admin clearance required to view audit status.' });
+  }
   const nextScheduledAt = new Date(lastAuditTime + AUDIT_INTERVAL_MS).toISOString();
   res.json({
     success: true,

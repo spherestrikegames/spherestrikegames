@@ -18,25 +18,12 @@ export const AdminSecretTerminal: React.FC<AdminSecretTerminalProps> = ({
   onLockAdmin,
   totalGamesCount,
 }) => {
-  const [code, setCode] = useState<string>('');
-  const [errorMsg, setErrorMsg] = useState<string>('');
-  const [successNotice, setSuccessNotice] = useState<boolean>(false);
   const [adminTab, setAdminTab] = useState<'security' | 'games'>('security');
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg('');
-
-    // Code is 'MacBookAir' (no spaces, case-insensitive)
-    if (code.trim().toLowerCase() === 'macbookair') {
-      onUnlockAdmin();
-      setSuccessNotice(true);
-      setCode('');
-      setTimeout(() => setSuccessNotice(false), 4000);
-    } else {
-      setErrorMsg('Incorrect secret code. Access denied.');
-    }
-  };
+  // If user is not an active logged-in administrator, do not render any admin terminal or abilities
+  if (!isAdmin) {
+    return null;
+  }
 
   return (
     <section id="admin-terminal-section" className="mt-14 mb-8 max-w-5xl mx-auto px-4 sm:px-6">
@@ -127,105 +114,57 @@ export const AdminSecretTerminal: React.FC<AdminSecretTerminalProps> = ({
             </div>
           )}
 
-          {/* Success Banner when just unlocked */}
-          {successNotice && (
-            <div className="p-3.5 rounded-2xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-200 text-xs sm:text-sm font-medium flex items-center gap-2.5 animate-in fade-in slide-in-from-top-2">
-              <Check className="w-5 h-5 text-emerald-400 shrink-0" />
-              <span>Admin clearance granted! AI Security Account Monitoring & Content Moderation tools are now active.</span>
-            </div>
-          )}
-
           {/* Unlocked Admin Controls Panel */}
-          {isAdmin ? (
-            adminTab === 'security' ? (
-              <AdminAccountMonitor />
-            ) : (
-              <div className="space-y-4 animate-in fade-in">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06]">
-                    <div className="text-[11px] font-mono text-emerald-400 uppercase tracking-wider font-semibold">
-                      Admin Status
-                    </div>
-                    <div className="text-sm font-bold text-white mt-1 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                      Authorized Moderator
-                    </div>
-                  </div>
-
-                  <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06]">
-                    <div className="text-[11px] font-mono text-slate-400 uppercase tracking-wider font-semibold">
-                      Live Games in Database
-                    </div>
-                    <div className="text-sm font-bold text-white mt-1 font-mono">
-                      {totalGamesCount} Registered
-                    </div>
-                  </div>
-
-                  <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06]">
-                    <div className="text-[11px] font-mono text-amber-400 uppercase tracking-wider font-semibold">
-                      Moderation Privileges
-                    </div>
-                    <div className="text-sm font-bold text-slate-200 mt-1">
-                      Delete Inappropriate / Edit Any Game
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-black/40 border border-emerald-500/20 flex items-start gap-3 text-xs text-slate-300">
-                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-bold text-emerald-300">Content Moderation Active: </span>
-                    Every game card across the arcade now features direct 
-                    <span className="inline-flex items-center gap-1 mx-1 px-1.5 py-0.5 rounded bg-rose-950/80 text-rose-300 border border-rose-500/40 text-[11px] font-semibold">
-                      <Trash2 className="w-3 h-3" /> Delete Inappropriate
-                    </span> 
-                    and 
-                    <span className="inline-flex items-center gap-1 mx-1 px-1.5 py-0.5 rounded bg-blue-950/80 text-blue-300 border border-blue-500/40 text-[11px] font-semibold">
-                      <Edit3 className="w-3 h-3" /> Edit Game
-                    </span> 
-                    buttons. You can also delete or edit any game inside the Game Player view.
-                  </div>
-                </div>
-              </div>
-            )
+          {adminTab === 'security' ? (
+            <AdminAccountMonitor />
           ) : (
-            /* Passkey Entry Form */
-            <form onSubmit={handleSubmit} className="space-y-3">
-              <div className="flex flex-col sm:flex-row gap-2.5 max-w-xl">
-                <div className="relative flex-1">
-                  <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                  <input
-                    type="password"
-                    value={code}
-                    onChange={(e) => {
-                      setCode(e.target.value);
-                      if (errorMsg) setErrorMsg('');
-                    }}
-                    placeholder="Enter secret code..."
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.07] focus:bg-white/[0.09] border border-white/[0.1] focus:border-blue-500 text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none transition-all font-mono"
-                  />
+            <div className="space-y-4 animate-in fade-in">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06]">
+                  <div className="text-[11px] font-mono text-emerald-400 uppercase tracking-wider font-semibold">
+                    Admin Status
+                  </div>
+                  <div className="text-sm font-bold text-white mt-1 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                    Authorized Moderator
+                  </div>
                 </div>
 
-                <button
-                  type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-[0.98] text-white text-xs sm:text-sm font-bold shadow-md shadow-blue-950 transition-all cursor-pointer shrink-0 flex items-center justify-center gap-2"
-                >
-                  <Unlock className="w-4 h-4" />
-                  <span>Authorize</span>
-                </button>
+                <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06]">
+                  <div className="text-[11px] font-mono text-slate-400 uppercase tracking-wider font-semibold">
+                    Live Games in Database
+                  </div>
+                  <div className="text-sm font-bold text-white mt-1 font-mono">
+                    {totalGamesCount} Registered
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06]">
+                  <div className="text-[11px] font-mono text-amber-400 uppercase tracking-wider font-semibold">
+                    Moderation Privileges
+                  </div>
+                  <div className="text-sm font-bold text-slate-200 mt-1">
+                    Delete Inappropriate / Edit Any Game
+                  </div>
+                </div>
               </div>
 
-              {errorMsg && (
-                <div className="text-xs text-rose-400 font-medium flex items-center gap-1.5 animate-in fade-in">
-                  <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
-                  <span>{errorMsg}</span>
+              <div className="p-4 rounded-2xl bg-black/40 border border-emerald-500/20 flex items-start gap-3 text-xs text-slate-300">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold text-emerald-300">Content Moderation Active: </span>
+                  Every game card across the arcade now features direct 
+                  <span className="inline-flex items-center gap-1 mx-1 px-1.5 py-0.5 rounded bg-rose-950/80 text-rose-300 border border-rose-500/40 text-[11px] font-semibold">
+                    <Trash2 className="w-3 h-3" /> Delete Inappropriate
+                  </span> 
+                  and 
+                  <span className="inline-flex items-center gap-1 mx-1 px-1.5 py-0.5 rounded bg-blue-950/80 text-blue-300 border border-blue-500/40 text-[11px] font-semibold">
+                    <Edit3 className="w-3 h-3" /> Edit Game
+                  </span> 
+                  buttons. You can also delete or edit any game inside the Game Player view.
                 </div>
-              )}
-
-              <p className="text-[11px] text-slate-500 font-mono">
-                Security clearance level: System Administrator. Grants AI Account Monitoring, Blocking, and Content Moderation.
-              </p>
-            </form>
+              </div>
+            </div>
           )}
         </div>
       </div>

@@ -265,10 +265,29 @@ export async function clearAllGames(): Promise<boolean> {
   return true;
 }
 
+// Helper to get active admin credentials for protected API operations
+function getAdminHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  };
+  try {
+    const raw = sessionStorage.getItem('spherestrike_current_user_v2');
+    if (raw) {
+      const u = JSON.parse(raw);
+      if (u.isAdmin && (u.role === 'admin' || u.isAdmin === true)) {
+        headers['x-admin-id'] = u.id;
+      }
+    }
+  } catch {}
+  return headers;
+}
+
 // User Monitoring & AI Security Audit API Helpers
 export async function fetchAllUsers(): Promise<User[]> {
   try {
-    const res = await fetch('/api/users');
+    const res = await fetch('/api/users', {
+      headers: getAdminHeaders()
+    });
     if (res.ok) {
       const data = await res.json();
       if (data.success && Array.isArray(data.users)) {
@@ -312,7 +331,7 @@ export async function blockUserAccount(userId: string, reason?: string): Promise
   try {
     const res = await fetch(`/api/users/${userId}/block`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAdminHeaders(),
       body: JSON.stringify({ reason: reason || 'Blocked by administrator due to policy violation' })
     });
     const data = await res.json();
@@ -338,7 +357,7 @@ export async function unblockUserAccount(userId: string): Promise<{ success: boo
   try {
     const res = await fetch(`/api/users/${userId}/unblock`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
+      headers: getAdminHeaders()
     });
     const data = await res.json();
     if (res.ok && data.success) {
@@ -358,7 +377,10 @@ export async function unblockUserAccount(userId: string): Promise<{ success: boo
 }
 
 export async function triggerAiSecurityAudit(): Promise<AiAuditReport> {
-  const res = await fetch('/api/admin/ai-security-audit', { method: 'POST' });
+  const res = await fetch('/api/admin/ai-security-audit', { 
+    method: 'POST',
+    headers: getAdminHeaders()
+  });
   const data = await res.json();
   if (res.ok && data.success && data.report) {
     return data.report;
@@ -368,7 +390,9 @@ export async function triggerAiSecurityAudit(): Promise<AiAuditReport> {
 
 export async function fetchAiAuditStatus(): Promise<{ report: AiAuditReport | null; nextScheduledAt: string }> {
   try {
-    const res = await fetch('/api/admin/audit-status');
+    const res = await fetch('/api/admin/audit-status', {
+      headers: getAdminHeaders()
+    });
     if (res.ok) {
       const data = await res.json();
       return {
@@ -416,7 +440,10 @@ export async function registerAccountApi(
 
 export async function deleteUserAccountApi(userId: string): Promise<boolean> {
   try {
-    const res = await fetch(`/api/users/${userId}`, { method: 'DELETE' });
+    const res = await fetch(`/api/users/${userId}`, { 
+      method: 'DELETE',
+      headers: getAdminHeaders()
+    });
     const data = await res.json();
     return Boolean(res.ok && data.success);
   } catch {
@@ -443,6 +470,9 @@ export async function saveAccountDataApi(userId: string, accountData: {
   favoriteGameIds?: string[];
   createdGameIds?: string[];
   gamesPlayed?: number;
+  lastPlayedGameId?: string;
+  lastPlayedGameTitle?: string;
+  lastActiveView?: string;
 }): Promise<User> {
   const res = await fetch('/api/auth/save-data', {
     method: 'POST',
@@ -457,7 +487,9 @@ export async function saveAccountDataApi(userId: string, accountData: {
 }
 
 export async function exportAccountsBackupApi(): Promise<any> {
-  const res = await fetch('/api/admin/accounts/export');
+  const res = await fetch('/api/admin/accounts/export', {
+    headers: getAdminHeaders()
+  });
   if (!res.ok) throw new Error('Failed to export accounts backup.');
   return await res.json();
 }
@@ -465,7 +497,7 @@ export async function exportAccountsBackupApi(): Promise<any> {
 export async function importAccountsBackupApi(importedData: any): Promise<{ success: boolean; message: string; totalAccounts: number }> {
   const res = await fetch('/api/admin/accounts/import', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: getAdminHeaders(),
     body: JSON.stringify(importedData)
   });
   const data = await res.json();
