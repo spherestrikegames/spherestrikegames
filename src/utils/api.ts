@@ -383,15 +383,15 @@ export async function fetchAiAuditStatus(): Promise<{ report: AiAuditReport | nu
   };
 }
 
-export async function checkAccountStatus(userId: string): Promise<{ isBlocked: boolean; blockedReason?: string }> {
+export async function checkAccountStatus(userId: string): Promise<{ isBlocked: boolean; blocked: boolean; blockedReason?: string }> {
   try {
     const users = await fetchAllUsers();
     const query = userId.toLowerCase();
     const match = users.find(u => u.id === userId || u.username.toLowerCase() === query || u.email.toLowerCase() === query);
     if (match && match.isBlocked) {
-      return { isBlocked: true, blockedReason: match.blockedReason || 'Blocked by administrator due to policy violations.' };
+      return { isBlocked: true, blocked: true, blockedReason: match.blockedReason || 'Blocked by administrator due to policy violations.' };
     }
   } catch {}
-  return { isBlocked: false };
+  return { isBlocked: false, blocked: false };
 }
 
