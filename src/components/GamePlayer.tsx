@@ -11,6 +11,7 @@ import {
   getUserGameProgress, saveUserGameProgress, recordHighScore, 
   recordGameSessionPlay, setGuestSessionProgress 
 } from '../utils/progress';
+import { injectCrashProtection } from '../utils/codeShield';
 
 interface GamePlayerProps {
   game: Game;
@@ -347,9 +348,9 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 <iframe
                   ref={iframeRef}
                   key={selectedVersion}
-                  srcDoc={activeCode}
+                  srcDoc={injectCrashProtection(activeCode)}
                   title={game.title}
-                  sandbox="allow-scripts allow-modals allow-same-origin allow-pointer-lock"
+                  sandbox="allow-scripts allow-modals allow-pointer-lock allow-forms allow-fullscreen allow-orientation-lock"
                   className="w-full h-full border-0 block"
                   allow="autoplay; fullscreen; gamepad"
                 />

@@ -1,4 +1,5 @@
 import { User } from '../types/user';
+import { syncUserToServer } from './api';
 
 const CURRENT_USER_KEY = 'spherestrike_current_user';
 const USERS_LIST_KEY = 'spherestrike_registered_users';
@@ -6,7 +7,13 @@ const USERS_LIST_KEY = 'spherestrike_registered_users';
 export function getCurrentUser(): User | null {
   try {
     const raw = localStorage.getItem(CURRENT_USER_KEY);
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    const user: User = JSON.parse(raw);
+    if (user.isBlocked) {
+      logoutUser();
+      return null;
+    }
+    return user;
   } catch {
     return null;
   }
@@ -16,6 +23,7 @@ export function setCurrentUser(user: User | null): void {
   try {
     if (user) {
       localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
+      syncUserToServer(user).catch(() => {});
     } else {
       localStorage.removeItem(CURRENT_USER_KEY);
     }
@@ -32,6 +40,7 @@ export function registerUser(username: string, email: string): User {
     joinedAt: new Date().toISOString(),
     gamesPlayed: 0,
     gamesCreatedCount: 0,
+    isBlocked: false,
   };
 
   setCurrentUser(newUser);
@@ -39,7 +48,12 @@ export function registerUser(username: string, email: string): User {
   try {
     const listRaw = localStorage.getItem(USERS_LIST_KEY);
     const list = listRaw ? JSON.parse(listRaw) : [];
-    list.push(newUser);
+    const idx = list.findIndex((u: User) => u.email.toLowerCase() === newUser.email.toLowerCase());
+    if (idx !== -1) {
+      list[idx] = newUser;
+    } else {
+      list.push(newUser);
+    }
     localStorage.setItem(USERS_LIST_KEY, JSON.stringify(list));
   } catch {
     // ignore
@@ -60,6 +74,10 @@ export function loginUser(emailOrUsername: string): User {
     // ignore
   }
 
+  if (foundUser && foundUser.isBlocked) {
+    throw new Error(`Account Blocked: ${foundUser.blockedReason || 'Your account has been blocked by an administrator due to policy violations.'}`);
+  }
+
   if (!foundUser) {
     // If not found in previous local storage list, create or log in as valid session user
     const username = emailOrUsername.includes('@') ? emailOrUsername.split('@')[0] : emailOrUsername;
@@ -70,6 +88,7 @@ export function loginUser(emailOrUsername: string): User {
       joinedAt: new Date().toISOString(),
       gamesPlayed: 1,
       gamesCreatedCount: 0,
+      isBlocked: false,
     };
   }
 

@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   ArrowLeft, Upload, CheckCircle2, Globe, Link as LinkIcon, 
   Code2, Sliders, ChevronDown, ChevronUp, RefreshCw, 
   Sparkles, Flame, Star, Tv, Zap, ExternalLink, Play,
-  AlertCircle, Image as ImageIcon
+  AlertCircle, Image as ImageIcon, ShieldCheck, ShieldAlert
 } from 'lucide-react';
 import { Game, GameGenre } from '../types/game';
 import { User } from '../types/user';
@@ -11,6 +11,7 @@ import { createGame, updateGame } from '../utils/api';
 import { addMyCreatedGameId } from '../utils/myGames';
 import { FrontPageCover, FRONT_PAGE_THEMES } from './FrontPageCover';
 import { LogIn, UserPlus, Lock } from 'lucide-react';
+import { validateGameCode, escapeHtml } from '../utils/codeShield';
 
 interface GameUploaderProps {
   onClose: () => void;
@@ -206,6 +207,73 @@ const GAME_TEMPLATES = [
   </script>
 </body>
 </html>`
+  },
+  {
+    id: 'pure-js-particles',
+    name: 'Neon Kinetic Sparks (Pure JS)',
+    genre: 'Action' as GameGenre,
+    description: 'Interactive magnetic particle physics engine built using pure JavaScript.',
+    defaultControls: [
+      { key: 'Mouse Move', action: 'Gravitational Pull' },
+      { key: 'Mouse Click / Hold', action: 'Energy Implosion' }
+    ],
+    code: `// Pure JavaScript Game Code (Automatically runs on canvas)
+var particles = [];
+for (var i = 0; i < 90; i++) {
+  particles.push({
+    x: Math.random() * 800,
+    y: Math.random() * 600,
+    vx: (Math.random() - 0.5) * 3,
+    vy: (Math.random() - 0.5) * 3,
+    color: 'hsl(' + (Math.random() * 360) + ', 90%, 65%)'
+  });
+}
+
+var mouse = { x: 400, y: 300, down: false };
+canvas.addEventListener('mousemove', function(e) {
+  var r = canvas.getBoundingClientRect();
+  mouse.x = (e.clientX - r.left) * (800 / r.width);
+  mouse.y = (e.clientY - r.top) * (600 / r.height);
+});
+canvas.addEventListener('mousedown', function() { mouse.down = true; });
+canvas.addEventListener('mouseup', function() { mouse.down = false; });
+
+function loop() {
+  ctx.fillStyle = 'rgba(9, 13, 22, 0.22)';
+  ctx.fillRect(0, 0, 800, 600);
+
+  for (var i = 0; i < particles.length; i++) {
+    var p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    if (p.x < 0 || p.x > 800) p.vx = -p.vx;
+    if (p.y < 0 || p.y > 600) p.vy = -p.vy;
+
+    var dx = mouse.x - p.x;
+    var dy = mouse.y - p.y;
+    var dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 220 && dist > 2) {
+      var force = (mouse.down ? 5.5 : 1.2) / dist;
+      p.vx += (dx / dist) * force;
+      p.vy += (dy / dist) * force;
+    }
+
+    ctx.fillStyle = p.color;
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, mouse.down ? 5 : 3.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#38bdf8';
+  ctx.font = '14px sans-serif';
+  ctx.fillText('MOVE MOUSE TO PULL • CLICK TO IMPLODE', 20, 32);
+
+  requestAnimationFrame(loop);
+}
+loop();`
   }
 ];
 
@@ -255,7 +323,7 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
 
   // Sandbox generated message & code editor toggle
   const [sandboxGeneratedMsg, setSandboxGeneratedMsg] = useState<string>('');
-  const [showCodeEditor, setShowCodeEditor] = useState<boolean>(false);
+  const [showCodeEditor, setShowCodeEditor] = useState<boolean>(true);
 
   // Advanced fields
   const [tagsInput, setTagsInput] = useState<string>(
@@ -274,6 +342,12 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
   const [previewKey, setPreviewKey] = useState<number>(0);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [dragOver, setDragOver] = useState<boolean>(false);
+
+  // Real-time pure code validation & crash shield analysis
+  const codeSafety = useMemo(() => {
+    if (method !== 'code') return null;
+    return validateGameCode(gameCode);
+  }, [method, gameCode]);
 
   // Clean URL helper
   const cleanUrl = (input: string): string => {
@@ -378,8 +452,18 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
     }
 
     if (method !== 'link' && !gameCode.trim()) {
-      alert('Please upload an HTML file or write game code.');
+      alert('Please enter or upload your game code.');
       return;
+    }
+
+    let preparedCode = gameCode;
+    if (method === 'code') {
+      const safetyResult = validateGameCode(gameCode);
+      if (!safetyResult.isValid) {
+        alert('Cannot publish game: Crash Shield Hazard Detected\n\n' + safetyResult.errors.join('\n\n') + '\n\nPlease fix the infinite loop or hazardous pattern before publishing so players can enjoy your game without freezing.');
+        return;
+      }
+      preparedCode = safetyResult.preparedCode;
     }
 
     if (!coverImage || !coverImage.trim()) {
@@ -408,7 +492,7 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
     const effectiveEmbedUrl = method === 'link' ? cleanUrl(gameLink) : undefined;
     const effectiveCode = effectiveEmbedUrl 
       ? `<iframe src="${effectiveEmbedUrl}" style="width:100%;height:100%;border:none;" allow="autoplay; fullscreen; gamepad" allowfullscreen></iframe>`
-      : gameCode;
+      : preparedCode;
 
     // Use uploaded image, or image URL, or leave blank to use designed front page
     const effectiveCoverImage = coverImage.trim() || undefined;
@@ -575,7 +659,7 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
           }`}
         >
           <Code2 className="w-3.5 h-3.5" />
-          <span>Sandbox (Upload Code & Generate)</span>
+          <span>Pure Code (HTML5 / JS)</span>
         </button>
       </div>
 
@@ -680,22 +764,51 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
               </div>
             )}
 
-            {/* Method: CODE SANDBOX (Upload code and it generates!) */}
+            {/* Method: PURE CODE & SANDBOX (Write or paste code with crash protection) */}
             {method === 'code' && (
               <div className="space-y-4 p-5 rounded-2xl bg-blue-950/20 border border-blue-500/20">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <label className="text-xs font-bold text-blue-300 uppercase tracking-wider flex items-center gap-1.5">
                       <Code2 className="w-4 h-4 text-blue-400" />
-                      <span>Sandbox: Upload Your Code & Generate</span>
+                      <span>Pure Code Game Engine (HTML5 / Pure JavaScript)</span>
                     </label>
                     <p className="text-[11px] text-slate-400 mt-0.5">
-                      Upload your HTML5 code file (.html, .htm, .js, .txt) and the sandbox automatically compiles and generates your game.
+                      Input your pure game code. Full HTML5 documents or raw JavaScript canvas scripts are automatically compiled into responsive playable games.
                     </p>
                   </div>
+                  {codeSafety?.isValid ? (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/60 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
+                      <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                      <span>Crash Shield: Safe</span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-950/80 border border-rose-500/40 text-rose-300 text-xs font-semibold">
+                      <ShieldAlert className="w-4 h-4 text-rose-400" />
+                      <span>Crash Hazard Detected</span>
+                    </span>
+                  )}
                 </div>
 
-                {/* Status banner when generated */}
+                {/* Real-time Crash Shield Hazard Alert Banner */}
+                {codeSafety && !codeSafety.isValid && (
+                  <div className="p-4 rounded-xl bg-rose-950/40 border border-rose-500/40 space-y-2 text-rose-200">
+                    <div className="flex items-center gap-2 font-bold text-xs text-rose-400">
+                      <ShieldAlert className="w-4 h-4 shrink-0 text-rose-400" />
+                      <span>Crash Protection Alert — Publishing Blocked</span>
+                    </div>
+                    <ul className="text-xs list-disc list-inside space-y-1 text-rose-300/90 font-mono">
+                      {codeSafety.errors.map((err, idx) => (
+                        <li key={idx}>{err}</li>
+                      ))}
+                    </ul>
+                    <p className="text-[11px] text-slate-300 bg-black/40 p-2.5 rounded-lg border border-white/[0.06] leading-relaxed">
+                      💡 <strong>Safe Coding Tip:</strong> Browser games must yield control to the browser each frame. Replace synchronous loops like <code className="text-rose-300 font-mono">while(true)</code> with <code className="text-emerald-300 font-mono">requestAnimationFrame(gameLoop)</code> so your game runs at 60 FPS smoothly without freezing the browser!
+                    </p>
+                  </div>
+                )}
+
+                {/* Status banner when generated or loaded */}
                 {sandboxGeneratedMsg && (
                   <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-xs text-emerald-300 font-medium">
                     <div className="flex items-center gap-2">
@@ -715,55 +828,49 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
                   </div>
                 )}
 
-                {/* Primary Upload Code Dropzone */}
-                <div
-                  onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                  onDragLeave={() => setDragOver(false)}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    setDragOver(false);
-                    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                      handleFileUpload(e.dataTransfer.files[0]);
-                    }
-                  }}
-                  className={`p-7 border-2 border-dashed rounded-xl text-center space-y-3 transition-all ${
-                    dragOver 
-                      ? 'border-blue-400 bg-blue-950/40 scale-[1.01]' 
-                      : 'border-blue-500/40 bg-black/40 hover:border-blue-400/70 hover:bg-black/60'
-                  }`}
-                >
-                  <Upload className="w-8 h-8 text-blue-400 mx-auto" />
-                  <div>
-                    <p className="text-sm font-bold text-white">
-                      Drop or upload your game code file here
-                    </p>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Accepts .html, .htm, .js, or .txt. Automatically extracts title and generates your playable sandbox game.
-                    </p>
-                  </div>
-                  <div>
-                    <label className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl shadow-lg cursor-pointer transition-colors">
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>Upload Code File & Generate</span>
-                      <input
-                        type="file"
-                        accept=".html,.htm,.js,.txt"
-                        onChange={(e) => {
-                          if (e.target.files && e.target.files[0]) {
-                            handleFileUpload(e.target.files[0]);
-                          }
+                {/* Direct Pure Code Editor */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                      <span>Source Code</span>
+                      <span className="text-[10px] text-slate-400 font-mono">HTML5 / JavaScript</span>
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPreviewTab('sandbox');
+                          setPreviewKey(prev => prev + 1);
                         }}
-                        className="hidden"
-                      />
-                    </label>
+                        className="flex items-center gap-1 px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold transition-colors cursor-pointer shadow-sm"
+                      >
+                        <Play className="w-3 h-3 fill-current" />
+                        <span>Run & Test Code</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <textarea
+                    value={gameCode}
+                    onChange={(e) => {
+                      setGameCode(e.target.value);
+                      setPreviewKey(prev => prev + 1);
+                    }}
+                    rows={11}
+                    className="w-full p-3 font-mono text-xs bg-slate-950 border border-white/[0.1] rounded-xl text-slate-200 focus:outline-none focus:border-blue-500 leading-relaxed tracking-wide"
+                    placeholder="Enter or paste pure HTML5 or pure JavaScript (e.g. canvas drawing, event listeners, requestAnimationFrame game loops)..."
+                  />
+                  <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <span>Type or paste pure code. Code edits compile to the live preview automatically.</span>
+                    <span>{gameCode.length.toLocaleString()} characters</span>
                   </div>
                 </div>
 
-                {/* Quick 1-Click Game Generation Presets */}
+                {/* Preset Templates */}
                 <div className="pt-2 border-t border-white/[0.06] space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-slate-300">
-                      Or Generate From Playable Preset Code:
+                      Load Preset Template:
                     </span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -790,45 +897,42 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
                   </div>
                 </div>
 
-                {/* Collapsible Direct Code Editor */}
-                <div className="pt-2 border-t border-white/[0.06]">
-                  <button
-                    type="button"
-                    onClick={() => setShowCodeEditor(!showCodeEditor)}
-                    className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white cursor-pointer py-1"
-                  >
-                    <Code2 className="w-3.5 h-3.5" />
-                    <span>{showCodeEditor ? 'Hide Code Editor' : 'Inspect or Edit Code Directly'}</span>
-                    {showCodeEditor ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                  </button>
-
-                  {showCodeEditor && (
-                    <div className="mt-2 space-y-2">
-                      <textarea
-                        value={gameCode}
+                {/* Or Upload Code File (.html, .htm, .js, .txt) */}
+                <div
+                  onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragOver(false);
+                    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                      handleFileUpload(e.dataTransfer.files[0]);
+                    }
+                  }}
+                  className={`p-4 border border-dashed rounded-xl text-center space-y-2 transition-all ${
+                    dragOver 
+                      ? 'border-blue-400 bg-blue-950/40' 
+                      : 'border-white/[0.1] bg-black/30 hover:border-white/[0.2]'
+                  }`}
+                >
+                  <p className="text-xs text-slate-300">
+                    Prefer uploading a file? Drop or select any <code className="text-blue-400 font-mono">.html</code> or <code className="text-blue-400 font-mono">.js</code> code file.
+                  </p>
+                  <div>
+                    <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 font-semibold text-xs rounded-lg cursor-pointer transition-colors border border-white/[0.08]">
+                      <Upload className="w-3 h-3 text-blue-400" />
+                      <span>Select Code File</span>
+                      <input
+                        type="file"
+                        accept=".html,.htm,.js,.txt"
                         onChange={(e) => {
-                          setGameCode(e.target.value);
-                          setPreviewKey(prev => prev + 1);
+                          if (e.target.files && e.target.files[0]) {
+                            handleFileUpload(e.target.files[0]);
+                          }
                         }}
-                        rows={8}
-                        className="w-full p-3 font-mono text-xs bg-slate-950 border border-white/[0.1] rounded-xl text-slate-200 focus:outline-none focus:border-blue-500 leading-relaxed"
-                        placeholder="<!DOCTYPE html><html><body><canvas id='gameCanvas'></canvas>...</body></html>"
+                        className="hidden"
                       />
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-slate-400">Edits regenerate the sandbox viewport automatically</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setPreviewTab('sandbox');
-                            setPreviewKey(prev => prev + 1);
-                          }}
-                          className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold transition-colors cursor-pointer"
-                        >
-                          Re-generate Sandbox
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                    </label>
+                  </div>
                 </div>
               </div>
             )}
@@ -1264,10 +1368,10 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
                   ) : (
                     <iframe
                       key={`preview-code-${previewKey}`}
-                      srcDoc={gameCode}
+                      srcDoc={codeSafety?.isValid ? codeSafety.preparedCode : `<!DOCTYPE html><html><body style="background:#090d16;color:#f87171;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;padding:24px;text-align:center;"><div style="font-size:32px;margin-bottom:8px;">🛡️</div><h3 style="margin:0 0 6px;font-size:15px;color:#fca5a5;">Preview Paused by Crash Shield</h3><p style="margin:0 0 10px;font-size:11px;color:#94a3b8;max-width:320px;">Execution is paused to protect your browser from freezing. Fix the hazardous loop or pattern in the editor to re-enable live testing.</p><div style="background:#1e293b;padding:8px 12px;border-radius:8px;font-family:monospace;font-size:11px;color:#fda4af;">${escapeHtml(codeSafety?.errors[0] || 'Crash hazard')}</div></body></html>`}
                       title="Code Preview"
                       className="w-full h-full border-none"
-                      sandbox="allow-scripts"
+                      sandbox="allow-scripts allow-modals allow-pointer-lock"
                     />
                   )}
                 </div>

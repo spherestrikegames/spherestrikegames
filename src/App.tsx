@@ -13,12 +13,13 @@ import { UserProfileModal } from './components/UserProfileModal';
 import { SphereStrikeLogo } from './components/SphereStrikeLogo';
 import { Game, GameGenre } from './types/game';
 import { User, AuthMode } from './types/user';
-import { fetchAllGames, deleteGame } from './utils/api';
+import { fetchAllGames, deleteGame, checkAccountStatus } from './utils/api';
 import { isUserCreatedGame, removeMyCreatedGameId } from './utils/myGames';
 import { getCurrentUser, logoutUser } from './utils/auth';
 import { 
   Sparkles, Flame, History, SearchX, Plus, RefreshCw, 
-  Gamepad2, Heart, Award, ArrowRight, ChevronRight, Edit3, Grid3X3
+  Gamepad2, Heart, Award, ArrowRight, ChevronRight, Edit3, Grid3X3,
+  Ban, ShieldAlert
 } from 'lucide-react';
 
 const MAIN_SCREEN_TOTAL_SLOTS = 65;
@@ -39,6 +40,30 @@ export default function App() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
+  const [blockedNotice, setBlockedNotice] = useState<string | null>(null);
+
+  // Monitor if active user session was blocked by administrator
+  useEffect(() => {
+    if (!currentUser) return;
+    const verifyStatus = async () => {
+      try {
+        const res = await checkAccountStatus(currentUser.id);
+        if (res.blocked) {
+          setBlockedNotice(
+            res.blockedReason || 'This account has been suspended by an administrator due to reported suspicious behavior.'
+          );
+          logoutUser();
+          setCurrentUser(null);
+        }
+      } catch (err) {
+        console.warn('Failed to verify user status:', err);
+      }
+    };
+
+    verifyStatus();
+    const interval = setInterval(verifyStatus, 20000);
+    return () => clearInterval(interval);
+  }, [currentUser?.id]);
 
   const handleOpenLogin = () => {
     setAuthMode('login');
@@ -546,6 +571,36 @@ export default function App() {
           }}
           onLogout={handleLogout}
         />
+
+        {/* Account Suspended Alert Modal */}
+        {blockedNotice && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
+            <div className="relative w-full max-w-md bg-[#12080c] border border-rose-500/50 rounded-3xl p-6 sm:p-7 shadow-2xl shadow-rose-950/80 text-center space-y-4">
+              <div className="w-14 h-14 rounded-2xl bg-rose-950/90 border border-rose-500/50 flex items-center justify-center text-rose-400 mx-auto shadow-lg shadow-rose-950">
+                <Ban className="w-8 h-8" />
+              </div>
+
+              <div>
+                <h3 className="text-xl font-black text-white font-['Outfit'] tracking-tight">
+                  Account Suspended
+                </h3>
+                <p className="text-xs text-rose-300/90 mt-2 leading-relaxed">
+                  {blockedNotice}
+                </p>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => setBlockedNotice(null)}
+                  className="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-[0.98] text-white text-xs sm:text-sm font-bold shadow-lg shadow-rose-950 transition-all cursor-pointer"
+                >
+                  Acknowledge & Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Footer */}
         <footer className="mt-16 border-t border-white/[0.08] bg-[#090d16] py-8 text-xs text-slate-400">

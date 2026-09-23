@@ -1,0 +1,525 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  ShieldAlert, ShieldCheck, Lock, Unlock, RefreshCw, Sparkles, 
+  Search, Filter, UserX, UserCheck, AlertTriangle, Clock, 
+  Zap, CheckCircle2, AlertOctagon, Info
+} from 'lucide-react';
+import { User } from '../types/user';
+import { AiAuditReport } from '../types/admin';
+import { 
+  fetchAllUsers, blockUserAccount, unblockUserAccount, 
+  triggerAiSecurityAudit, fetchAiAuditStatus 
+} from '../utils/api';
+
+export const AdminAccountMonitor: React.FC = () => {
+  const [users, setUsers] = useState<User[]>([]);
+  const [auditReport, setAuditReport] = useState<AiAuditReport | null>(null);
+  const [nextScheduledAt, setNextScheduledAt] = useState<string>('');
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isAuditing, setIsAuditing] = useState<boolean>(false);
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'flagged' | 'blocked' | 'active'>('all');
+  const [blockingUserId, setBlockingUserId] = useState<string | null>(null);
+  const [customReason, setCustomReason] = useState<string>('');
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState<string>('60:00');
+
+  // Load users & audit report status
+  const loadData = async () => {
+    setIsLoading(true);
+    try {
+      const [fetchedUsers, auditData] = await Promise.all([
+        fetchAllUsers(),
+        fetchAiAuditStatus()
+      ]);
+      setUsers(fetchedUsers);
+      setAuditReport(auditData.report);
+      setNextScheduledAt(auditData.nextScheduledAt);
+    } catch (err) {
+      console.error('Failed to load user monitor data:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  // Hourly countdown timer effect
+  useEffect(() => {
+    if (!nextScheduledAt) return;
+    const interval = setInterval(() => {
+      const target = new Date(nextScheduledAt).getTime();
+      const diff = target - Date.now();
+      if (diff <= 0) {
+        setTimeRemaining('00:00 - Scan running...');
+        loadData();
+      } else {
+        const mins = Math.floor(diff / 60000);
+        const secs = Math.floor((diff % 60000) / 1000);
+        setTimeRemaining(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [nextScheduledAt]);
+
+  // Trigger manual AI security audit call
+  const handleRunAiAudit = async () => {
+    setIsAuditing(true);
+    setActionNotice(null);
+    try {
+      const report = await triggerAiSecurityAudit();
+      setAuditReport(report);
+      setNextScheduledAt(report.nextScheduledAuditAt || new Date(Date.now() + 3600000).toISOString());
+      
+      // Refresh users
+      const updatedUsers = await fetchAllUsers();
+      setUsers(updatedUsers);
+      
+      setActionNotice('✨ Gemini AI Security Audit complete! All account activity analyzed.');
+      setTimeout(() => setActionNotice(null), 5000);
+    } catch (err: any) {
+      console.error('AI Security Audit failed:', err);
+      setActionNotice('⚠️ AI Security Audit error: ' + (err.message || 'Check server connection.'));
+    } finally {
+      setIsAuditing(false);
+    }
+  };
+
+  // Block account
+  const handleBlockUser = async (userId: string, username: string) => {
+    const reason = customReason.trim() || 'Blocked by administrator due to policy violation.';
+    const result = await blockUserAccount(userId, reason);
+    if (result.success) {
+      setActionNotice(`🔒 Account @${username} has been BLOCKED.`);
+      setTimeout(() => setActionNotice(null), 4000);
+      setBlockingUserId(null);
+      setCustomReason('');
+      loadData();
+    } else {
+      alert('Failed to block account: ' + (result.message || 'Unknown error'));
+    }
+  };
+
+  // Unblock account
+  const handleUnblockUser = async (userId: string, username: string) => {
+    const result = await unblockUserAccount(userId);
+    if (result.success) {
+      setActionNotice(`🔓 Account @${username} has been UNBLOCKED.`);
+      setTimeout(() => setActionNotice(null), 4000);
+      loadData();
+    } else {
+      alert('Failed to unblock account: ' + (result.message || 'Unknown error'));
+    }
+  };
+
+  // Clear AI flags manually
+  const handleClearFlags = (userId: string) => {
+    setUsers(prev => prev.map(u => {
+      if (u.id === userId) {
+        return { ...u, isFlagged: false, suspiciousScore: 5, flagReason: undefined };
+      }
+      return u;
+    }));
+    setActionNotice('Flag dismissed for account.');
+    setTimeout(() => setActionNotice(null), 3000);
+  };
+
+  // Filtered users list
+  const filteredUsers = users.filter(user => {
+    const matchesSearch = 
+      user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.email.toLowerCase().includes(searchTerm.toLowerCase());
+
+    if (!matchesSearch) return false;
+
+    if (statusFilter === 'flagged') return user.isFlagged || (user.suspiciousScore && user.suspiciousScore >= 60);
+    if (statusFilter === 'blocked') return user.isBlocked;
+    if (statusFilter === 'active') return !user.isBlocked && !user.isFlagged && (!user.suspiciousScore || user.suspiciousScore < 60);
+
+    return true;
+  });
+
+  const totalCount = users.length;
+  const flaggedCount = users.filter(u => u.isFlagged || (u.suspiciousScore || 0) >= 60).length;
+  const blockedCount = users.filter(u => u.isBlocked).length;
+  const activeCount = users.filter(u => !u.isBlocked && !u.isFlagged && (u.suspiciousScore || 0) < 60).length;
+
+  const threatLevel = auditReport?.threatLevel || (flaggedCount > 2 ? 'HIGH' : flaggedCount > 0 ? 'MEDIUM' : 'LOW');
+
+  return (
+    <div className="space-y-6 animate-in fade-in">
+      {/* Top Threat & Schedule Status Bar */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        {/* Threat Level */}
+        <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400 font-semibold">
+              AI System Threat Level
+            </span>
+            <div className="flex items-center gap-2 mt-1">
+              <span className={`text-base font-extrabold uppercase font-mono ${
+                threatLevel === 'CRITICAL' ? 'text-rose-500 animate-pulse' :
+                threatLevel === 'HIGH' ? 'text-orange-400' :
+                threatLevel === 'MEDIUM' ? 'text-amber-400' : 'text-emerald-400'
+              }`}>
+                {threatLevel} THREAT
+              </span>
+            </div>
+          </div>
+          <div className={`p-2.5 rounded-xl ${
+            threatLevel === 'CRITICAL' || threatLevel === 'HIGH' 
+              ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' 
+              : threatLevel === 'MEDIUM' 
+              ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+              : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+          }`}>
+            <AlertOctagon className="w-5 h-5" />
+          </div>
+        </div>
+
+        {/* Total Registered Accounts */}
+        <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400 font-semibold">
+              Registered Accounts
+            </span>
+            <div className="text-xl font-bold text-white mt-1 font-mono">
+              {totalCount} Total
+            </div>
+          </div>
+          <div className="p-2.5 rounded-xl bg-blue-500/20 text-blue-400 border border-blue-500/30">
+            <UserCheck className="w-5 h-5" />
+          </div>
+        </div>
+
+        {/* Flagged / Suspicious Accounts */}
+        <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400 font-semibold">
+              Flagged / Suspicious
+            </span>
+            <div className="text-xl font-bold text-amber-400 mt-1 font-mono flex items-center gap-2">
+              {flaggedCount}
+              {flaggedCount > 0 && <span className="text-xs font-sans px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold">Action Needed</span>}
+            </div>
+          </div>
+          <div className="p-2.5 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+            <AlertTriangle className="w-5 h-5" />
+          </div>
+        </div>
+
+        {/* Blocked Accounts */}
+        <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-mono uppercase tracking-wider text-slate-400 font-semibold">
+              Blocked Accounts
+            </span>
+            <div className="text-xl font-bold text-rose-400 mt-1 font-mono">
+              {blockedCount}
+            </div>
+          </div>
+          <div className="p-2.5 rounded-xl bg-rose-500/20 text-rose-400 border border-rose-500/30">
+            <UserX className="w-5 h-5" />
+          </div>
+        </div>
+      </div>
+
+      {/* Hourly Automated AI Audit Control Banner */}
+      <div className="p-5 rounded-2xl bg-gradient-to-r from-blue-950/60 via-indigo-950/50 to-slate-900/80 border border-blue-500/30 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shrink-0 shadow-md shadow-blue-900">
+            <Zap className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h4 className="text-sm font-bold text-white font-['Outfit']">
+                Hourly Automated Gemini AI Security Monitor
+              </h4>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold uppercase tracking-wider flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                ACTIVE (Every 60m)
+              </span>
+            </div>
+            <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
+              {auditReport?.summary || 'The AI engine scans all registered user profiles every 60 minutes for creation velocity floods, suspicious disposable emails, score tampering, and bot patterns.'}
+            </p>
+            <div className="flex items-center gap-4 mt-2 text-[11px] font-mono text-slate-400">
+              <span className="flex items-center gap-1 text-slate-300">
+                <Clock className="w-3.5 h-3.5 text-blue-400" />
+                Next auto scan in: <strong className="text-blue-300">{timeRemaining}</strong>
+              </span>
+              {auditReport?.timestamp && (
+                <span>Last scan: {new Date(auditReport.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleRunAiAudit}
+          disabled={isAuditing}
+          className="self-start md:self-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-[0.98] text-white text-xs font-bold shadow-lg shadow-blue-950 border border-blue-400/30 transition-all cursor-pointer flex items-center gap-2 shrink-0 disabled:opacity-50"
+        >
+          <Sparkles className={`w-4 h-4 ${isAuditing ? 'animate-spin text-amber-300' : 'text-amber-300'}`} />
+          <span>{isAuditing ? 'Analyzing Accounts...' : 'Run Instant AI Security Scan'}</span>
+        </button>
+      </div>
+
+      {/* Action Notice Alert */}
+      {actionNotice && (
+        <div className="p-3.5 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-200 text-xs font-semibold flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{actionNotice}</span>
+        </div>
+      )}
+
+      {/* Search & Filter Controls */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        {/* Search */}
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search accounts by username or email..."
+            className="w-full pl-10 pr-4 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] focus:border-blue-500 text-white text-xs placeholder-slate-500 focus:outline-none transition-all font-mono"
+          />
+        </div>
+
+        {/* Filter Pills */}
+        <div className="flex items-center gap-1 bg-white/[0.04] p-1 rounded-xl border border-white/[0.08]">
+          <button
+            type="button"
+            onClick={() => setStatusFilter('all')}
+            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              statusFilter === 'all' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            All ({totalCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter('flagged')}
+            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              statusFilter === 'flagged' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-400 hover:text-amber-300'
+            }`}
+          >
+            🚨 Flagged ({flaggedCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter('blocked')}
+            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              statusFilter === 'blocked' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-400 hover:text-rose-300'
+            }`}
+          >
+            🔒 Blocked ({blockedCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setStatusFilter('active')}
+            className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              statusFilter === 'active' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-400 hover:text-emerald-300'
+            }`}
+          >
+            ✅ Clean ({activeCount})
+          </button>
+        </div>
+      </div>
+
+      {/* Accounts Monitoring Table / List */}
+      <div className="space-y-3">
+        {isLoading ? (
+          <div className="p-8 text-center text-slate-400 text-xs font-mono space-y-2">
+            <RefreshCw className="w-6 h-6 animate-spin mx-auto text-blue-400" />
+            <p>Loading accounts database and AI security records...</p>
+          </div>
+        ) : filteredUsers.length === 0 ? (
+          <div className="p-8 rounded-2xl bg-white/[0.02] border border-white/[0.06] text-center text-slate-400 text-xs font-mono">
+            No accounts match the current filter criteria.
+          </div>
+        ) : (
+          filteredUsers.map((user) => {
+            const risk = user.suspiciousScore || 5;
+            const isHighRisk = risk >= 60;
+            const isBlocked = !!user.isBlocked;
+
+            return (
+              <div 
+                key={user.id} 
+                className={`p-4 rounded-2xl border transition-all ${
+                  isBlocked
+                    ? 'bg-rose-950/20 border-rose-500/30'
+                    : isHighRisk
+                    ? 'bg-amber-950/20 border-amber-500/40'
+                    : 'bg-white/[0.03] border-white/[0.06] hover:border-white/[0.12]'
+                }`}
+              >
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  {/* User Profile Summary */}
+                  <div className="flex items-start gap-3.5">
+                    <div className={`w-11 h-11 rounded-2xl flex items-center justify-center font-bold text-sm shrink-0 border ${
+                      isBlocked
+                        ? 'bg-rose-950 text-rose-300 border-rose-500/40'
+                        : isHighRisk
+                        ? 'bg-amber-950 text-amber-300 border-amber-500/40'
+                        : 'bg-blue-950/80 text-blue-300 border-blue-500/30'
+                    }`}>
+                      {user.username.substring(0, 2).toUpperCase()}
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-white text-sm font-['Outfit']">
+                          @{user.username}
+                        </span>
+                        
+                        {/* Status Badges */}
+                        {isBlocked ? (
+                          <span className="px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-300 border border-rose-500/40 text-[10px] font-mono font-bold flex items-center gap-1">
+                            <Lock className="w-3 h-3" /> BLOCKED
+                          </span>
+                        ) : isHighRisk ? (
+                          <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-mono font-bold flex items-center gap-1 animate-pulse">
+                            <AlertTriangle className="w-3 h-3" /> SUSPICIOUS FLAG
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[10px] font-mono font-semibold">
+                            ACTIVE
+                          </span>
+                        )}
+
+                        {user.aiRiskCategory && (
+                          <span className="text-[10px] font-mono text-slate-400 bg-white/[0.04] px-2 py-0.5 rounded border border-white/[0.06]">
+                            {user.aiRiskCategory}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="text-xs text-slate-400 flex items-center gap-3 font-mono">
+                        <span>{user.email}</span>
+                        <span>•</span>
+                        <span>Joined: {new Date(user.joinedAt).toLocaleDateString()}</span>
+                      </div>
+
+                      {/* AI Audit Explanation */}
+                      {(user.aiExplanation || user.flagReason || isBlocked) && (
+                        <div className={`mt-2 p-2.5 rounded-xl text-xs font-mono border ${
+                          isBlocked
+                            ? 'bg-rose-950/50 text-rose-200 border-rose-500/30'
+                            : isHighRisk
+                            ? 'bg-amber-950/40 text-amber-200 border-amber-500/30'
+                            : 'bg-black/30 text-slate-300 border-white/[0.05]'
+                        }`}>
+                          <span className="font-bold text-slate-200">AI Security Evaluation: </span>
+                          {isBlocked ? (user.blockedReason || user.aiExplanation || 'Blocked by administrator.') : (user.aiExplanation || user.flagReason)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Right side: AI Risk Meter & Block Action Buttons */}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 shrink-0">
+                    {/* Risk Bar */}
+                    <div className="w-36 space-y-1">
+                      <div className="flex items-center justify-between text-[10px] font-mono font-semibold">
+                        <span className="text-slate-400">AI Risk Score</span>
+                        <span className={risk >= 60 ? 'text-rose-400 font-bold' : risk >= 30 ? 'text-amber-400' : 'text-emerald-400'}>
+                          {risk}%
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
+                        <div 
+                          className={`h-full transition-all duration-500 ${
+                            risk >= 60 ? 'bg-gradient-to-r from-amber-500 to-rose-500' :
+                            risk >= 30 ? 'bg-amber-400' : 'bg-emerald-400'
+                          }`}
+                          style={{ width: `${risk}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Controls */}
+                    <div className="flex items-center gap-2">
+                      {isBlocked ? (
+                        <button
+                          type="button"
+                          onClick={() => handleUnblockUser(user.id, user.username)}
+                          className="px-3 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/40 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                        >
+                          <Unlock className="w-3.5 h-3.5" />
+                          <span>Unblock Account</span>
+                        </button>
+                      ) : (
+                        <>
+                          {user.isFlagged && (
+                            <button
+                              type="button"
+                              onClick={() => handleClearFlags(user.id)}
+                              className="px-2.5 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 text-xs font-semibold transition-all cursor-pointer"
+                              title="Clear flags and restore clean status"
+                            >
+                              Clear Flag
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (blockingUserId === user.id) {
+                                setBlockingUserId(null);
+                              } else {
+                                setBlockingUserId(user.id);
+                                setCustomReason(user.aiExplanation || 'Blocked by administrator due to suspicious activity.');
+                              }
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/40 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                          >
+                            <Lock className="w-3.5 h-3.5" />
+                            <span>Block Account</span>
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Inline Block Reason Form Popover */}
+                {blockingUserId === user.id && !isBlocked && (
+                  <div className="mt-3 pt-3 border-t border-rose-500/30 flex flex-col sm:flex-row gap-2.5 animate-in fade-in">
+                    <input
+                      type="text"
+                      value={customReason}
+                      onChange={(e) => setCustomReason(e.target.value)}
+                      placeholder="Specify block reason for this account..."
+                      className="flex-1 px-3 py-1.5 rounded-xl bg-black/60 border border-rose-500/40 text-white text-xs font-mono focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleBlockUser(user.id, user.username)}
+                      className="px-4 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all cursor-pointer shrink-0"
+                    >
+                      Confirm Block
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBlockingUserId(null)}
+                      className="px-3 py-1.5 rounded-xl bg-white/[0.06] text-slate-400 hover:text-white text-xs font-semibold transition-all cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+};

@@ -74,11 +74,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
       setIsLoading(true);
       setTimeout(() => {
-        const user = loginUser(identifier);
-        migrateGuestProgressToUser(user.id);
-        setIsLoading(false);
-        onSuccess(user);
-        onClose();
+        try {
+          const user = loginUser(identifier);
+          migrateGuestProgressToUser(user.id);
+          setIsLoading(false);
+          onSuccess(user);
+          onClose();
+        } catch (err: any) {
+          setIsLoading(false);
+          setErrorMsg(err.message || 'Authentication failed.');
+        }
       }, 400);
     }
   };

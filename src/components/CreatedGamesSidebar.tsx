@@ -7,6 +7,7 @@ import { Game, GameGenre } from '../types/game';
 import { FrontPageCover } from './FrontPageCover';
 import { updateGame, deleteGame } from '../utils/api';
 import { removeMyCreatedGameId } from '../utils/myGames';
+import { validateGameCode } from '../utils/codeShield';
 
 interface CreatedGamesSidebarProps {
   isOpen: boolean;
@@ -119,6 +120,17 @@ export const CreatedGamesSidebar: React.FC<CreatedGamesSidebarProps> = ({
         .map(t => t.trim())
         .filter(Boolean);
 
+      let finalCode = gameCode || selectedGame.code;
+      if (gameCode && !embedUrl.trim()) {
+        const safety = validateGameCode(gameCode);
+        if (!safety.isValid) {
+          setErrorMsg('Crash Shield Blocked: ' + safety.errors.join('; '));
+          setIsSaving(false);
+          return;
+        }
+        finalCode = safety.preparedCode;
+      }
+
       const updatedPayload = {
         title: title.trim(),
         description: description.trim(),
@@ -128,7 +140,7 @@ export const CreatedGamesSidebar: React.FC<CreatedGamesSidebarProps> = ({
         tags: parsedTags.length > 0 ? parsedTags : selectedGame.tags,
         version: version.trim() || selectedGame.currentVersion || '1.0.0',
         changelog: 'Updated game metadata and front cover in creator side mode.',
-        code: gameCode || selectedGame.code,
+        code: finalCode,
         embedUrl: embedUrl.trim() || undefined,
       };
 

@@ -2,8 +2,11 @@ import express, { Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { GoogleGenAI, Type } from '@google/genai';
 import { INITIAL_GAMES } from './src/data/initialGames';
 import { Game } from './src/types/game';
+import { User } from './src/types/user';
+import { AiAuditReport, AiFlaggedUser } from './src/types/admin';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,6 +15,16 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const isProduction = process.env.NODE_ENV === 'production';
 
+// Initialize Gemini Client via @google/genai SDK
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+  httpOptions: {
+    headers: {
+      'User-Agent': 'aistudio-build',
+    }
+  }
+});
+
 // Allow large game uploads (HTML/Canvas bundles up to 25MB)
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
@@ -19,8 +32,83 @@ app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 // In-memory store with disk persistence fallback
 const DATA_DIR = path.resolve(__dirname, 'data');
 const DATA_FILE = path.resolve(DATA_DIR, 'games.json');
+const USERS_FILE = path.resolve(DATA_DIR, 'users.json');
 
 let games: Game[] = [];
+let users: User[] = [];
+let latestAiAuditReport: AiAuditReport | null = null;
+let lastAuditTime = Date.now();
+const AUDIT_INTERVAL_MS = 3600000; // 1 Hour
+
+const INITIAL_USERS_SEED: User[] = [
+  {
+    id: 'user-admin-001',
+    username: 'rishi_admin',
+    email: 'rishi.p1.goyal@gmail.com',
+    joinedAt: new Date(Date.now() - 86400000 * 30).toISOString(),
+    gamesPlayed: 142,
+    gamesCreatedCount: 5,
+    isBlocked: false,
+    isFlagged: false,
+    suspiciousScore: 2,
+    aiRiskCategory: 'Clean Verified Administrator',
+    aiExplanation: 'System Administrator account. No anomalies or malicious activity detected.'
+  },
+  {
+    id: 'user-player-002',
+    username: 'pixel_ninja',
+    email: 'pixel.ninja@arcade.io',
+    joinedAt: new Date(Date.now() - 86400000 * 12).toISOString(),
+    gamesPlayed: 84,
+    gamesCreatedCount: 2,
+    isBlocked: false,
+    isFlagged: false,
+    suspiciousScore: 8,
+    aiRiskCategory: 'Active Player',
+    aiExplanation: 'Regular user profile with genuine game engagement and standard upload velocity.'
+  },
+  {
+    id: 'user-bot-003',
+    username: 'x_spam_bot_882',
+    email: 'temp_user_9921@trashmail.xyz',
+    joinedAt: new Date(Date.now() - 1800000).toISOString(), // 30 mins ago
+    gamesPlayed: 0,
+    gamesCreatedCount: 28,
+    isBlocked: false,
+    isFlagged: true,
+    flagReason: 'High risk bot pattern: 28 games created in 30 minutes from disposable domain.',
+    suspiciousScore: 92,
+    aiRiskCategory: 'Creation Flood / Bot Spammer',
+    aiExplanation: 'Account created 30 minutes ago published 28 games in high frequency. Disposable email domain detected (@trashmail.xyz).'
+  },
+  {
+    id: 'user-hacker-004',
+    username: 'score_hacker_1337',
+    email: 'score_hacker@darknet.org',
+    joinedAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+    gamesPlayed: 320,
+    gamesCreatedCount: 1,
+    isBlocked: false,
+    isFlagged: true,
+    flagReason: 'Score tampering detected: impossible integer score overflow.',
+    suspiciousScore: 88,
+    aiRiskCategory: 'Score Manipulation',
+    aiExplanation: 'Logged impossible high scores (>9,999,999 pts in under 2 seconds) across 14 titles within 5 minutes.'
+  },
+  {
+    id: 'user-casual-005',
+    username: 'retro_gamer_sam',
+    email: 'sam.retro@gmail.com',
+    joinedAt: new Date(Date.now() - 86400000 * 5).toISOString(),
+    gamesPlayed: 29,
+    gamesCreatedCount: 1,
+    isBlocked: false,
+    isFlagged: false,
+    suspiciousScore: 5,
+    aiRiskCategory: 'Casual Player',
+    aiExplanation: 'Normal gaming behavior and verified email domain.'
+  }
+];
 
 function loadGames() {
   try {
@@ -52,8 +140,35 @@ function saveGames() {
   }
 }
 
-// Initialize games
+function loadUsers() {
+  try {
+    if (fs.existsSync(USERS_FILE)) {
+      const raw = fs.readFileSync(USERS_FILE, 'utf-8');
+      users = JSON.parse(raw);
+    } else {
+      users = [...INITIAL_USERS_SEED];
+      saveUsers();
+    }
+  } catch (err) {
+    console.error('Error loading users from disk, using seed:', err);
+    users = [...INITIAL_USERS_SEED];
+  }
+}
+
+function saveUsers() {
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Failed to write users to disk:', err);
+  }
+}
+
+// Initialize stores
 loadGames();
+loadUsers();
 
 // API Routes
 app.get('/api/games', (req: Request, res: Response) => {
@@ -284,6 +399,273 @@ app.post('/api/games/reset-defaults', (req: Request, res: Response) => {
   res.json({ success: true, games });
 });
 
+// ==========================================
+// USER MONITORING & AI SECURITY AUDIT SYSTEM
+// ==========================================
+
+// Core AI Security Audit Function using Gemini API
+async function runAiSecurityAuditCore(): Promise<AiAuditReport> {
+  const now = new Date().toISOString();
+  lastAuditTime = Date.now();
+
+  const userSummaryList = users.map(u => ({
+    id: u.id,
+    username: u.username,
+    email: u.email,
+    joinedAt: u.joinedAt,
+    gamesPlayed: u.gamesPlayed || 0,
+    gamesCreatedCount: u.gamesCreatedCount || 0,
+    isBlocked: !!u.isBlocked
+  }));
+
+  let report: AiAuditReport;
+
+  try {
+    const prompt = `You are an AI Cyber-Security Auditor for Sphere Strike Arcade. Analyze the following account activity records for bot behavior, spam patterns, suspicious email domains, creation floods, and malicious activity:
+
+User Accounts Data:
+${JSON.stringify(userSummaryList, null, 2)}
+
+Provide a structured security report evaluating each account. Return JSON matching this exact structure:
+{
+  "threatLevel": "LOW" | "MEDIUM" | "HIGH" | "CRITICAL",
+  "summary": "Short paragraph summarizing security posture",
+  "flaggedUsers": [
+    {
+      "userId": "string",
+      "username": "string",
+      "email": "string",
+      "suspiciousScore": number (0 to 100),
+      "riskCategory": "string category name",
+      "explanation": "string reason for flag",
+      "recommendedAction": "Block Account" | "Monitor" | "Dismiss"
+    }
+  ]
+}`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.8-flash',
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+      }
+    });
+
+    const textOutput = response.text || '';
+    const parsed = JSON.parse(textOutput);
+
+    const flaggedUsersList: AiFlaggedUser[] = Array.isArray(parsed.flaggedUsers) ? parsed.flaggedUsers : [];
+
+    // Apply AI findings back to user records
+    users.forEach(u => {
+      const match = flaggedUsersList.find(f => f.userId === u.id || f.username === u.username);
+      if (match) {
+        u.suspiciousScore = match.suspiciousScore;
+        u.aiRiskCategory = match.riskCategory;
+        u.aiExplanation = match.explanation;
+        u.lastAiAuditAt = now;
+        if (match.suspiciousScore >= 60) {
+          u.isFlagged = true;
+          u.flagReason = match.explanation;
+        } else {
+          u.isFlagged = false;
+        }
+      } else {
+        u.suspiciousScore = u.suspiciousScore ?? 5;
+        u.aiRiskCategory = u.aiRiskCategory || 'Active User';
+        u.aiExplanation = u.aiExplanation || 'Regular activity within expected parameters.';
+        u.lastAiAuditAt = now;
+      }
+    });
+
+    saveUsers();
+
+    const blockedCount = users.filter(u => u.isBlocked).length;
+    const flaggedCount = users.filter(u => u.isFlagged || (u.suspiciousScore || 0) >= 60).length;
+
+    report = {
+      timestamp: now,
+      threatLevel: parsed.threatLevel || (flaggedCount > 2 ? 'HIGH' : flaggedCount > 0 ? 'MEDIUM' : 'LOW'),
+      summary: parsed.summary || `AI Security Audit scanned ${users.length} accounts. ${flaggedCount} suspicious patterns identified.`,
+      accountsScanned: users.length,
+      flaggedCount,
+      blockedCount,
+      flaggedUsers: flaggedUsersList,
+      nextScheduledAuditAt: new Date(Date.now() + AUDIT_INTERVAL_MS).toISOString()
+    };
+  } catch (err) {
+    console.warn('Gemini AI call failed, running heuristic AI security inspection:', err);
+
+    // Reliable heuristic fallback analysis
+    const flaggedList: AiFlaggedUser[] = [];
+    users.forEach(u => {
+      let score = 5;
+      let reasons: string[] = [];
+      let category = 'Clean Profile';
+
+      // Domain inspection
+      if (/@(trashmail|tempmail|darknet|dispostable|mailinator)\./i.test(u.email)) {
+        score += 45;
+        reasons.push('Disposable or suspicious email domain detected');
+      }
+
+      // Creation frequency
+      const createdCount = u.gamesCreatedCount || 0;
+      if (createdCount > 15) {
+        score += 40;
+        reasons.push(`High upload frequency (${createdCount} games published)`);
+        category = 'Creation Flood / Bot Spammer';
+      }
+
+      // Bot naming convention
+      if (/(bot|spam|hack|1337|temp_user)/i.test(u.username)) {
+        score += 25;
+        reasons.push('Automated or hostile username pattern');
+      }
+
+      score = Math.min(score, 99);
+      u.suspiciousScore = score;
+      u.lastAiAuditAt = now;
+
+      if (score >= 60) {
+        u.isFlagged = true;
+        u.flagReason = reasons.join('; ');
+        u.aiRiskCategory = category !== 'Clean Profile' ? category : 'Suspicious Behavior';
+        u.aiExplanation = reasons.join('. ');
+
+        flaggedList.push({
+          userId: u.id,
+          username: u.username,
+          email: u.email,
+          suspiciousScore: score,
+          riskCategory: u.aiRiskCategory,
+          explanation: u.aiExplanation,
+          recommendedAction: score >= 80 ? 'Block Account' : 'Monitor'
+        });
+      }
+    });
+
+    saveUsers();
+
+    report = {
+      timestamp: now,
+      threatLevel: flaggedList.length >= 2 ? 'HIGH' : flaggedList.length > 0 ? 'MEDIUM' : 'LOW',
+      summary: `Automated Hourly AI Security Check scanned ${users.length} registered accounts and identified ${flaggedList.length} suspicious profiles.`,
+      accountsScanned: users.length,
+      flaggedCount: flaggedList.length,
+      blockedCount: users.filter(u => u.isBlocked).length,
+      flaggedUsers: flaggedList,
+      nextScheduledAuditAt: new Date(Date.now() + AUDIT_INTERVAL_MS).toISOString()
+    };
+  }
+
+  latestAiAuditReport = report;
+  return report;
+}
+
+// User endpoints
+app.get('/api/users', (req: Request, res: Response) => {
+  res.json({ success: true, users });
+});
+
+app.post('/api/users', (req: Request, res: Response) => {
+  try {
+    const body: Partial<User> = req.body;
+    if (!body.email && !body.username) {
+      return res.status(400).json({ success: false, message: 'Username or email required' });
+    }
+
+    const email = (body.email || `${body.username}@spherestrike.games`).toLowerCase().trim();
+    const existingIndex = users.findIndex(u => u.email.toLowerCase() === email || (u.id && u.id === body.id));
+
+    let userRecord: User;
+    if (existingIndex !== -1) {
+      userRecord = {
+        ...users[existingIndex],
+        ...body,
+        email,
+        username: body.username || users[existingIndex].username
+      };
+      users[existingIndex] = userRecord;
+    } else {
+      userRecord = {
+        id: body.id || 'user-' + Date.now().toString(36),
+        username: body.username || email.split('@')[0],
+        email,
+        joinedAt: body.joinedAt || new Date().toISOString(),
+        gamesPlayed: body.gamesPlayed || 0,
+        gamesCreatedCount: body.gamesCreatedCount || 0,
+        isBlocked: false,
+        isFlagged: false,
+        suspiciousScore: 5
+      };
+      users.push(userRecord);
+    }
+
+    saveUsers();
+    res.status(201).json({ success: true, user: userRecord });
+  } catch (err) {
+    console.error('Error saving user:', err);
+    res.status(500).json({ success: false, message: 'Server error saving user' });
+  }
+});
+
+// Block Account Endpoint
+app.post('/api/users/:id/block', (req: Request, res: Response) => {
+  const userId = req.params.id;
+  const reason = req.body.reason || 'Blocked by administrator due to policy violation.';
+
+  const user = users.find(u => u.id === userId || u.username.toLowerCase() === userId.toLowerCase());
+  if (!user) {
+    return res.status(404).json({ success: false, message: 'User account not found' });
+  }
+
+  user.isBlocked = true;
+  user.blockedReason = reason;
+  user.blockedAt = new Date().toISOString();
+  saveUsers();
+
+  res.json({ success: true, message: `Account @${user.username} has been blocked.`, user });
+});
+
+// Unblock Account Endpoint
+app.post('/api/users/:id/unblock', (req: Request, res: Response) => {
+  const userId = req.params.id;
+  const user = users.find(u => u.id === userId || u.username.toLowerCase() === userId.toLowerCase());
+  if (!user) {
+    return res.status(404).json({ success: false, message: 'User account not found' });
+  }
+
+  user.isBlocked = false;
+  user.blockedReason = undefined;
+  user.blockedAt = undefined;
+  saveUsers();
+
+  res.json({ success: true, message: `Account @${user.username} has been unblocked.`, user });
+});
+
+// Trigger Manual or Hourly AI Security Audit
+app.post('/api/admin/ai-security-audit', async (req: Request, res: Response) => {
+  try {
+    const report = await runAiSecurityAuditCore();
+    res.json({ success: true, report });
+  } catch (err: any) {
+    console.error('Error in AI Security Audit:', err);
+    res.status(500).json({ success: false, message: err.message || 'Error running AI Security Audit' });
+  }
+});
+
+// Get Audit Status & Timer Schedule
+app.get('/api/admin/audit-status', (req: Request, res: Response) => {
+  const nextScheduledAt = new Date(lastAuditTime + AUDIT_INTERVAL_MS).toISOString();
+  res.json({
+    success: true,
+    report: latestAiAuditReport,
+    lastAuditTime: new Date(lastAuditTime).toISOString(),
+    nextScheduledAt
+  });
+});
+
 async function startServer() {
   if (!isProduction) {
     // Mount Vite middlewares for Hot Module Reloading in dev
@@ -303,6 +685,20 @@ async function startServer() {
 
   app.listen(PORT, () => {
     console.log(`[Sphere Strike] Server running on http://localhost:${PORT}`);
+    
+    // Perform initial AI Security Audit scan and start 1-hour background interval
+    runAiSecurityAuditCore().then(() => {
+      console.log('[Sphere Strike AI Security] Initial AI Security Audit completed.');
+    }).catch(err => {
+      console.warn('[Sphere Strike AI Security] Initial audit warning:', err);
+    });
+
+    setInterval(() => {
+      console.log('[Sphere Strike AI Security] Running automated hourly AI Security Audit across all accounts...');
+      runAiSecurityAuditCore().catch(err => {
+        console.error('[Sphere Strike AI Security] Hourly audit error:', err);
+      });
+    }, AUDIT_INTERVAL_MS);
   });
 }
 

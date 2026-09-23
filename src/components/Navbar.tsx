@@ -89,10 +89,21 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           {/* Admin Mode Active Badge */}
           {isAdmin && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-xs font-mono font-bold">
+            <button
+              type="button"
+              onClick={() => {
+                const el = document.getElementById('admin-terminal-section');
+                if (el) {
+                  el.scrollIntoView({ behavior: 'smooth' });
+                }
+              }}
+              title="Admin Mode Active — Click to jump to Account Sentinel & Moderation Terminal"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-950/70 hover:bg-emerald-900/60 border border-emerald-500/40 text-emerald-300 text-xs font-mono font-bold transition-all cursor-pointer shadow-sm hover:scale-105"
+            >
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden md:inline">Admin Mode</span>
-            </div>
+              <span className="hidden md:inline">Admin Sentinel</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping hidden md:inline" />
+            </button>
           )}
 
           {/* Side Mode: My Created Games Button */}

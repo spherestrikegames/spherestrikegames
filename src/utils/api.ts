@@ -1,7 +1,10 @@
 import { Game, GameComment } from '../types/game';
+import { User } from '../types/user';
+import { AiAuditReport } from '../types/admin';
 import { INITIAL_GAMES } from '../data/initialGames';
 
 const STORAGE_KEY = 'spherestrike_games_cache';
+const USERS_STORAGE_KEY = 'spherestrike_registered_users';
 
 export async function fetchAllGames(): Promise<Game[]> {
   try {
@@ -260,5 +263,123 @@ export async function clearAllGames(): Promise<boolean> {
     localStorage.removeItem('hyperarcade_games_cache');
   } catch {}
   return true;
+}
+
+// User Monitoring & AI Security Audit API Helpers
+export async function fetchAllUsers(): Promise<User[]> {
+  try {
+    const res = await fetch('/api/users');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.users)) {
+        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(data.users));
+        return data.users;
+      }
+    }
+  } catch (e) {
+    console.warn('Backend fetch users failed, falling back to local storage', e);
+  }
+
+  // Local storage fallback
+  try {
+    const raw = localStorage.getItem(USERS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function syncUserToServer(user: User): Promise<User> {
+  try {
+    const res = await fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(user)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.user) {
+        return data.user;
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to sync user to backend', e);
+  }
+  return user;
+}
+
+export async function blockUserAccount(userId: string, reason?: string): Promise<{ success: boolean; user?: User; message?: string }> {
+  try {
+    const res = await fetch(`/api/users/${userId}/block`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: reason || 'Blocked by administrator due to policy violation' })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      // Sync local cache
+      const users = await fetchAllUsers();
+      const idx = users.findIndex(u => u.id === userId);
+      if (idx !== -1) {
+        users[idx].isBlocked = true;
+        users[idx].blockedReason = reason || 'Blocked by administrator';
+        users[idx].blockedAt = new Date().toISOString();
+        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+      }
+      return { success: true, user: data.user };
+    }
+    return { success: false, message: data.message || 'Failed to block user' };
+  } catch (err: any) {
+    return { success: false, message: err.message || 'Server error blocking user' };
+  }
+}
+
+export async function unblockUserAccount(userId: string): Promise<{ success: boolean; user?: User; message?: string }> {
+  try {
+    const res = await fetch(`/api/users/${userId}/unblock`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      const users = await fetchAllUsers();
+      const idx = users.findIndex(u => u.id === userId);
+      if (idx !== -1) {
+        users[idx].isBlocked = false;
+        users[idx].blockedReason = undefined;
+        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+      }
+      return { success: true, user: data.user };
+    }
+    return { success: false, message: data.message || 'Failed to unblock user' };
+  } catch (err: any) {
+    return { success: false, message: err.message || 'Server error unblocking user' };
+  }
+}
+
+export async function triggerAiSecurityAudit(): Promise<AiAuditReport> {
+  const res = await fetch('/api/admin/ai-security-audit', { method: 'POST' });
+  const data = await res.json();
+  if (res.ok && data.success && data.report) {
+    return data.report;
+  }
+  throw new Error(data.message || 'Failed to trigger AI Security Audit');
+}
+
+export async function fetchAiAuditStatus(): Promise<{ report: AiAuditReport | null; nextScheduledAt: string }> {
+  try {
+    const res = await fetch('/api/admin/audit-status');
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        report: data.report || null,
+        nextScheduledAt: data.nextScheduledAt || new Date(Date.now() + 3600000).toISOString()
+      };
+    }
+  } catch {}
+  return {
+    report: null,
+    nextScheduledAt: new Date(Date.now() + 3600000).toISOString()
+  };
 }
 
