@@ -1,10 +1,11 @@
 import React from 'react';
 import { 
   Home, Flame, History, Heart, Upload, Code2, 
-  Gamepad2, Rocket, Target, Boxes, Compass, Smile, Trophy, Tv, Users,
-  ChevronLeft, ChevronRight, Sparkles
+  Gamepad2, Rocket, Target, Boxes, Compass, Smile, Trophy, Tv, Users, GraduationCap,
+  ChevronLeft, ChevronRight, Edit3, Sparkles
 } from 'lucide-react';
 import { GameGenre } from '../types/game';
+import { SphereStrikeLogo } from './SphereStrikeLogo';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -14,8 +15,10 @@ interface SidebarProps {
   activeGenre: GameGenre;
   onSelectGenre: (genre: GameGenre) => void;
   onOpenUpload: () => void;
+  onOpenCreatedGames: () => void;
   updatedGamesCount: number;
   favoritesCount: number;
+  myCreatedGamesCount: number;
 }
 
 interface CategoryItem {
@@ -28,6 +31,7 @@ const CATEGORIES: CategoryItem[] = [
   { id: '2 Player', label: '2 Player', icon: <Users className="w-4 h-4" /> },
   { id: 'Action', label: 'Action', icon: <Target className="w-4 h-4" /> },
   { id: 'Arcade', label: 'Arcade', icon: <Gamepad2 className="w-4 h-4" /> },
+  { id: 'Educational', label: 'Educational', icon: <GraduationCap className="w-4 h-4" /> },
   { id: 'Shooter', label: 'Shooter', icon: <Rocket className="w-4 h-4" /> },
   { id: 'Puzzle', label: 'Puzzle', icon: <Boxes className="w-4 h-4" /> },
   { id: 'Driving', label: 'Driving', icon: <Compass className="w-4 h-4" /> },
@@ -44,8 +48,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeGenre,
   onSelectGenre,
   onOpenUpload,
+  onOpenCreatedGames,
   updatedGamesCount,
   favoritesCount,
+  myCreatedGamesCount,
 }) => {
   return (
     <>
@@ -64,31 +70,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
         }`}
       >
         {/* Brand Header */}
-        <div className="h-16 px-4 flex items-center justify-between border-b border-white/[0.08] shrink-0">
+        <div className="h-16 px-3.5 flex items-center justify-between border-b border-white/[0.08] shrink-0">
           <button
             onClick={() => {
               onNavigate('arcade');
               onSelectGenre('All');
             }}
-            className="flex items-center gap-3 text-left group cursor-pointer overflow-hidden"
+            className="flex items-center text-left group cursor-pointer overflow-hidden"
           >
-            {/* Sphere Strike Emblem */}
-            <div className="relative w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-900 border border-blue-400/30 flex items-center justify-center shrink-0 shadow-md shadow-blue-950">
-              <div className="w-4 h-4 rounded-full bg-white shadow-inner flex items-center justify-center">
-                <div className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
-              </div>
-              <div className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-400" />
-            </div>
-
-            {isOpen && (
-              <div className="flex flex-col min-w-0">
-                <span className="font-extrabold text-base tracking-tight text-white font-['Outfit'] group-hover:text-blue-400 transition-colors truncate">
-                  Sphere Strike
-                </span>
-                <span className="text-[10px] uppercase font-mono tracking-widest text-slate-400">
-                  GAMES ARCADE
-                </span>
-              </div>
+            {isOpen ? (
+              <SphereStrikeLogo variant="horizontal" size="sm" />
+            ) : (
+              <SphereStrikeLogo variant="icon" size="sm" />
             )}
           </button>
 
@@ -125,7 +118,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }`}
             >
               <Home className="w-5 h-5 shrink-0" />
-              {isOpen && <span>Home</span>}
+              {isOpen && <span>Home (65 Slots)</span>}
+            </button>
+
+            {/* Mode on the side: My Created Games */}
+            <button
+              onClick={onOpenCreatedGames}
+              title="My Created Games (View & Edit Info)"
+              className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all cursor-pointer bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-transparent hover:from-amber-500/25 hover:via-orange-500/20 text-amber-300 border border-amber-500/30 shadow-sm"
+            >
+              <div className="flex items-center gap-3">
+                <Edit3 className="w-5 h-5 text-amber-400 shrink-0" />
+                {isOpen && <span className="font-semibold text-white">My Created Games</span>}
+              </div>
+              {isOpen && (
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-amber-500/25 text-amber-300 border border-amber-500/40 font-bold">
+                  {myCreatedGamesCount}
+                </span>
+              )}
             </button>
 
             <button
@@ -191,12 +201,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
           </div>
 
-          {/* Categories Section (CrazyGames Style) */}
+          {/* Categories Section */}
           <div className="space-y-1">
             {isOpen && (
               <div className="px-3 pb-1 text-[11px] font-mono uppercase tracking-wider text-slate-400 font-semibold flex items-center justify-between">
                 <span>Categories</span>
-                <span className="text-[10px] text-slate-400">9</span>
+                <span className="text-[10px] text-slate-400">{CATEGORIES.length}</span>
               </div>
             )}
 
@@ -261,10 +271,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {isOpen && (
           <div className="p-4 border-t border-white/[0.08] text-[11px] text-slate-400 space-y-1">
             <div className="flex items-center justify-between">
-              <span className="font-medium text-slate-400">Sphere Strike v2.4</span>
-              <span className="text-emerald-400 font-mono">Live</span>
+              <span className="font-medium text-slate-400">Sphere Strike v2.5</span>
+              <span className="text-emerald-400 font-mono">65 Slots</span>
             </div>
-            <p className="text-slate-400 text-[10px]">Free HTML5 Community Web Arcade</p>
+            <p className="text-slate-400 text-[10px]">65 Uniform Arcade Game Slots</p>
           </div>
         )}
       </aside>

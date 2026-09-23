@@ -1,45 +1,263 @@
 import React, { useState } from 'react';
 import { 
-  Upload, Code2, Play, Sparkles, FileText, CheckCircle2, 
-  ArrowLeft, RefreshCw, Layers, AlertCircle, Globe, Link as LinkIcon, 
-  HelpCircle, ExternalLink, Sliders, ChevronDown, ChevronUp
+  ArrowLeft, Upload, CheckCircle2, Globe, Link as LinkIcon, 
+  Code2, Sliders, ChevronDown, ChevronUp, RefreshCw, 
+  Sparkles, Flame, Star, Tv, Zap, ExternalLink, Play,
+  AlertCircle, Image as ImageIcon
 } from 'lucide-react';
 import { Game, GameGenre } from '../types/game';
-import { GAME_TEMPLATES } from '../data/gameTemplates';
+import { User } from '../types/user';
 import { createGame, updateGame } from '../utils/api';
+import { addMyCreatedGameId } from '../utils/myGames';
+import { FrontPageCover, FRONT_PAGE_THEMES } from './FrontPageCover';
+import { LogIn, UserPlus, Lock } from 'lucide-react';
 
 interface GameUploaderProps {
   onClose: () => void;
-  onGameSaved: (savedGame: Game) => void;
+  onGameSaved: (game: Game) => void;
   initialGameToUpdate?: Game | null;
+  currentUser: User | null;
+  isAdmin?: boolean;
+  onRequireAuth?: () => void;
 }
+
+const GAME_TEMPLATES = [
+  {
+    id: 'retro-dodge',
+    name: 'Cosmic Dodge',
+    genre: 'Arcade' as GameGenre,
+    description: 'Dodge descending asteroids using arrow keys. Survive as long as you can!',
+    defaultControls: [
+      { key: 'Arrow Left / Right', action: 'Move Spaceship' },
+      { key: 'Spacebar', action: 'Hyperspeed Boost' }
+    ],
+    code: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { margin: 0; background: #030712; overflow: hidden; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; color: #fff; }
+    canvas { background: #0b0f19; border: 1px solid #1e293b; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+  </style>
+</head>
+<body>
+  <canvas id="c" width="480" height="400"></canvas>
+  <script>
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    let shipX = 220;
+    let score = 0;
+    let gameOver = false;
+    let meteors = [];
+    const keys = {};
+
+    window.addEventListener('keydown', e => keys[e.code] = true);
+    window.addEventListener('keyup', e => keys[e.code] = false);
+
+    function spawnMeteor() {
+      meteors.push({ x: Math.random() * 450, y: -20, r: 12 + Math.random() * 10, speed: 2 + Math.random() * 3 });
+    }
+    setInterval(spawnMeteor, 600);
+
+    function loop() {
+      if (!gameOver) {
+        if (keys['ArrowLeft'] && shipX > 20) shipX -= 5;
+        if (keys['ArrowRight'] && shipX < 440) shipX += 5;
+
+        ctx.fillStyle = '#090d16';
+        ctx.fillRect(0, 0, 480, 400);
+
+        // Player ship
+        ctx.fillStyle = '#3b82f6';
+        ctx.beginPath();
+        ctx.moveTo(shipX, 360);
+        ctx.lineTo(shipX - 15, 385);
+        ctx.lineTo(shipX + 15, 385);
+        ctx.closePath();
+        ctx.fill();
+
+        // Meteors
+        ctx.fillStyle = '#ef4444';
+        for (let i = 0; i < meteors.length; i++) {
+          let m = meteors[i];
+          m.y += m.speed;
+          ctx.beginPath();
+          ctx.arc(m.x, m.y, m.r, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Collision
+          let dist = Math.hypot(m.x - shipX, m.y - 370);
+          if (dist < m.r + 12) {
+            gameOver = true;
+          }
+        }
+        meteors = meteors.filter(m => m.y < 420);
+        score++;
+
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '14px monospace';
+        ctx.fillText('SCORE: ' + score, 15, 25);
+      } else {
+        ctx.fillStyle = 'rgba(0,0,0,0.85)';
+        ctx.fillRect(0, 0, 480, 400);
+        ctx.fillStyle = '#f87171';
+        ctx.font = 'bold 24px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('GAME OVER', 240, 190);
+        ctx.font = '14px sans-serif';
+        ctx.fillStyle = '#e2e8f0';
+        ctx.fillText('Final Score: ' + score, 240, 220);
+        ctx.font = '12px sans-serif';
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillText('Press SPACE to restart', 240, 250);
+        if (keys['Space']) {
+          gameOver = false;
+          score = 0;
+          meteors = [];
+          shipX = 220;
+        }
+      }
+      requestAnimationFrame(loop);
+    }
+    loop();
+  </script>
+</body>
+</html>`
+  },
+  {
+    id: 'brick-breaker',
+    name: 'Neon Breaker',
+    genre: 'Arcade' as GameGenre,
+    description: 'Bounce the sphere and shatter all blocks with precision paddle reflexes.',
+    defaultControls: [
+      { key: 'Mouse Movement', action: 'Control Paddle' },
+      { key: 'Click', action: 'Launch Ball' }
+    ],
+    code: `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { margin: 0; background: #030712; display: flex; align-items: center; justify-content: center; height: 100vh; font-family: sans-serif; }
+    canvas { background: #0f172a; border: 1px solid #334155; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <canvas id="b" width="480" height="400"></canvas>
+  <script>
+    const canvas = document.getElementById('b');
+    const ctx = canvas.getContext('2d');
+    let paddleX = 190;
+    let ballX = 240, ballY = 300, dx = 3, dy = -3;
+    let bricks = [];
+    const rows = 4, cols = 7;
+    for(let r=0; r<rows; r++){
+      for(let c=0; c<cols; c++){
+        bricks.push({ x: 35 + c*60, y: 40 + r*25, w: 50, h: 18, alive: true });
+      }
+    }
+    canvas.addEventListener('mousemove', e => {
+      const rect = canvas.getBoundingClientRect();
+      paddleX = e.clientX - rect.left - 45;
+    });
+
+    function draw() {
+      ctx.fillStyle = '#0a0f1d';
+      ctx.fillRect(0,0,480,400);
+
+      // Paddle
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(paddleX, 370, 90, 10);
+
+      // Ball
+      ctx.fillStyle = '#f8fafc';
+      ctx.beginPath();
+      ctx.arc(ballX, ballY, 7, 0, Math.PI*2);
+      ctx.fill();
+
+      ballX += dx; ballY += dy;
+      if(ballX < 7 || ballX > 473) dx = -dx;
+      if(ballY < 7) dy = -dy;
+      if(ballY > 363 && ballX > paddleX && ballX < paddleX + 90) dy = -Math.abs(dy);
+      if(ballY > 400) { ballX = 240; ballY = 250; dy = -3; }
+
+      // Bricks
+      let anyLeft = false;
+      for(let b of bricks){
+        if(b.alive){
+          anyLeft = true;
+          ctx.fillStyle = '#6366f1';
+          ctx.fillRect(b.x, b.y, b.w, b.h);
+          if(ballX > b.x && ballX < b.x + b.w && ballY > b.y && ballY < b.y + b.h){
+            b.alive = false;
+            dy = -dy;
+          }
+        }
+      }
+      if(!anyLeft){
+        ctx.fillStyle = '#22c55e';
+        ctx.font = '20px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('STAGE CLEARED!', 240, 200);
+      }
+      requestAnimationFrame(draw);
+    }
+    draw();
+  </script>
+</body>
+</html>`
+  }
+];
 
 export const GameUploader: React.FC<GameUploaderProps> = ({
   onClose,
   onGameSaved,
   initialGameToUpdate,
+  currentUser,
+  isAdmin = false,
+  onRequireAuth,
 }) => {
   const isUpdating = Boolean(initialGameToUpdate);
 
-  // Method Selection: 'link' (Default) | 'file' | 'code'
+  // Upload Method State
   const [method, setMethod] = useState<'link' | 'file' | 'code'>(() => {
     if (initialGameToUpdate?.embedUrl) return 'link';
     if (initialGameToUpdate && !initialGameToUpdate.embedUrl) return 'code';
     return 'link';
   });
 
-  // Core Form State
+  // Core Game Fields
   const [title, setTitle] = useState<string>(initialGameToUpdate?.title || '');
   const [description, setDescription] = useState<string>(initialGameToUpdate?.description || '');
   const [gameLink, setGameLink] = useState<string>(initialGameToUpdate?.embedUrl || '');
   const [genre, setGenre] = useState<GameGenre>(initialGameToUpdate?.genre || 'Action');
-  const [author, setAuthor] = useState<string>(initialGameToUpdate?.author || '');
+  const [author, setAuthor] = useState<string>(initialGameToUpdate?.author || currentUser?.username || '');
   const [version, setVersion] = useState<string>(
     initialGameToUpdate 
       ? `1.${initialGameToUpdate.versions.length}.0`
       : '1.0.0'
   );
   const [changelog, setChangelog] = useState<string>('');
+
+  // Front Page / Cover Artwork State
+  const [coverMode, setCoverMode] = useState<'upload' | 'url' | 'designer'>(
+    initialGameToUpdate?.coverImage ? 'url' : 'upload'
+  );
+  const [coverImage, setCoverImage] = useState<string>(initialGameToUpdate?.coverImage || '');
+  const [selectedBadge, setSelectedBadge] = useState<'hot' | 'update' | 'new' | 'star' | 'stream' | 'none'>(
+    initialGameToUpdate?.badge || 'new'
+  );
+  const [selectedTheme, setSelectedTheme] = useState<string>('sky-rush');
+  const [selectedIcon, setSelectedIcon] = useState<string>('Gamepad2');
+
+  // Preview Mode in Right Column
+  const [previewTab, setPreviewTab] = useState<'frontpage' | 'sandbox'>('frontpage');
+
+  // Sandbox generated message & code editor toggle
+  const [sandboxGeneratedMsg, setSandboxGeneratedMsg] = useState<string>('');
+  const [showCodeEditor, setShowCodeEditor] = useState<boolean>(false);
+
+  // Advanced fields
   const [tagsInput, setTagsInput] = useState<string>(
     initialGameToUpdate?.tags.join(', ') || 'Web, Indie, HTML5'
   );
@@ -47,7 +265,6 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
     initialGameToUpdate?.controls.map(c => `${c.key}:${c.action}`).join('\n') || 
     'Mouse / Arrow Keys:Move & Aim\nSpace / Left Click:Action'
   );
-  const [accentTheme, setAccentTheme] = useState<string>('blue');
   const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
 
   // Code / File state for secondary modes
@@ -57,75 +274,40 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
   const [previewKey, setPreviewKey] = useState<number>(0);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [dragOver, setDragOver] = useState<boolean>(false);
-  const [linkTested, setLinkTested] = useState<boolean>(false);
 
-  // Helper to extract clean URL if user pastes an iframe snippet or raw URL
+  // Clean URL helper
   const cleanUrl = (input: string): string => {
     let raw = input.trim();
     if (!raw) return '';
-    
-    // If iframe snippet: <iframe ... src="https://..." ...>
     const iframeMatch = raw.match(/src=["']([^"']+)["']/i);
     if (iframeMatch && iframeMatch[1]) {
       raw = iframeMatch[1].trim();
     }
-
-    // Add https:// if protocol is missing
     if (!raw.startsWith('http://') && !raw.startsWith('https://') && !raw.startsWith('//')) {
       raw = 'https://' + raw;
     }
-
     return raw;
   };
 
   const handleLinkChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const cleaned = cleanUrl(e.target.value);
     setGameLink(cleaned);
-    setLinkTested(false);
   };
 
-  // Sample playable web games for quick test
-  const sampleLinks = [
-    { name: 'Itch.io HTML5 Embed', url: 'https://v6p9d9t4.ssl.hwcdn.net/html/10129759/index.html' },
-    { name: 'Canvas Asteroids', url: 'https://dougmcinnes.com/html-5-asteroids/' },
-    { name: '2048 Web Game', url: 'https://play2048.co/' }
-  ];
-
-  // Pick thumbnail gradient based on non-neon theme
-  const getGradientForTheme = (th: string) => {
-    switch (th) {
-      case 'emerald': return 'from-emerald-950 via-slate-900 to-black';
-      case 'amber': return 'from-amber-950 via-slate-900 to-black';
-      case 'slate': return 'from-slate-800 via-slate-900 to-black';
-      case 'blue':
-      default: return 'from-blue-950 via-slate-900 to-black';
-    }
+  // Image file handler
+  const handleImageFile = (file: File) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      if (dataUrl) {
+        setCoverImage(dataUrl);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
-  const getAccentColor = (th: string) => {
-    switch (th) {
-      case 'emerald': return '#10b981';
-      case 'amber': return '#f59e0b';
-      case 'slate': return '#94a3b8';
-      case 'blue':
-      default: return '#3b82f6';
-    }
-  };
-
-  // Handle template selection
-  const handleSelectTemplate = (templateId: string) => {
-    const tmpl = GAME_TEMPLATES.find(t => t.id === templateId);
-    if (tmpl) {
-      setGameCode(tmpl.code);
-      if (!title) setTitle(tmpl.name);
-      if (!description) setDescription(tmpl.description);
-      setGenre(tmpl.genre);
-      setControlsInput(tmpl.defaultControls.map(c => `${c.key}:${c.action}`).join('\n'));
-      setPreviewKey(prev => prev + 1);
-    }
-  };
-
-  // Handle file drop / upload
+  // Handle HTML file upload and auto-generate sandbox
   const handleFileUpload = (file: File) => {
     if (!file) return;
     const reader = new FileReader();
@@ -136,28 +318,57 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
         if (!title) {
           const match = content.match(/<title>([^<]+)<\/title>/i);
           if (match && match[1]) setTitle(match[1]);
-          else setTitle(file.name.replace(/\.[^/.]+$/, ''));
+          else setTitle(file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' '));
         }
+        if (!description) {
+          setDescription('Playable browser game generated in Sphere Strike Sandbox.');
+        }
+        setPreviewTab('sandbox');
         setPreviewKey(prev => prev + 1);
+        setSandboxGeneratedMsg(`⚡ "${file.name}" uploaded and generated in Sandbox!`);
       }
     };
     reader.readAsText(file);
   };
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFileUpload(e.dataTransfer.files[0]);
+  // Handle template selection and generate sandbox
+  const handleSelectTemplate = (templateId: string) => {
+    const tmpl = GAME_TEMPLATES.find(t => t.id === templateId);
+    if (tmpl) {
+      setGameCode(tmpl.code);
+      if (!title) setTitle(tmpl.name);
+      if (!description) setDescription(tmpl.description);
+      setGenre(tmpl.genre);
+      setControlsInput(tmpl.defaultControls.map(c => `${c.key}:${c.action}`).join('\n'));
+      setPreviewTab('sandbox');
+      setPreviewKey(prev => prev + 1);
+      setSandboxGeneratedMsg(`⚡ Template "${tmpl.name}" generated in Sandbox!`);
     }
   };
 
-  // Publish / Upload game
+  // Sample links
+  const sampleLinks = [
+    { name: 'Itch.io HTML5 Game', url: 'https://v6p9d9t4.ssl.hwcdn.net/html/10129759/index.html' },
+    { name: 'Canvas Asteroids', url: 'https://dougmcinnes.com/html-5-asteroids/' },
+    { name: '2048 Web Game', url: 'https://play2048.co/' }
+  ];
+
+  // Submit and Publish
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!currentUser) {
+      if (onRequireAuth) onRequireAuth();
+      return;
+    }
+
     if (!title.trim()) {
       alert('Please enter a name for your game.');
+      return;
+    }
+
+    if (!description.trim()) {
+      alert('Please enter a short description for your game.');
       return;
     }
 
@@ -168,6 +379,11 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
 
     if (method !== 'link' && !gameCode.trim()) {
       alert('Please upload an HTML file or write game code.');
+      return;
+    }
+
+    if (!coverImage || !coverImage.trim()) {
+      alert('Please upload your game front cover image before publishing.');
       return;
     }
 
@@ -194,6 +410,9 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
       ? `<iframe src="${effectiveEmbedUrl}" style="width:100%;height:100%;border:none;" allow="autoplay; fullscreen; gamepad" allowfullscreen></iframe>`
       : gameCode;
 
+    // Use uploaded image, or image URL, or leave blank to use designed front page
+    const effectiveCoverImage = coverImage.trim() || undefined;
+
     try {
       if (isUpdating && initialGameToUpdate) {
         const updated = await updateGame(initialGameToUpdate.id, {
@@ -205,10 +424,13 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
           changelog: changelog || 'Updated version uploaded.',
           code: effectiveCode,
           embedUrl: effectiveEmbedUrl,
+          coverImage: effectiveCoverImage,
+          badge: selectedBadge,
           type: effectiveEmbedUrl ? 'embed' : 'html5',
           author: author.trim() || initialGameToUpdate.author,
           controls: parsedControls.length > 0 ? parsedControls : initialGameToUpdate.controls,
         });
+        addMyCreatedGameId(updated.id);
         onGameSaved(updated);
       } else {
         const created = await createGame({
@@ -216,17 +438,20 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
           description: description.trim() || 'A community-crafted web game.',
           genre,
           tags: parsedTags.length > 0 ? parsedTags : ['Indie', 'Web'],
-          author: author.trim() || 'Sphere Creator',
+          author: author.trim() || currentUser?.username || 'Sphere Creator',
           version: version || '1.0.0',
           changelog: changelog || 'Initial public release.',
           code: effectiveCode,
           embedUrl: effectiveEmbedUrl,
+          coverImage: effectiveCoverImage,
+          badge: selectedBadge,
           type: effectiveEmbedUrl ? 'embed' : 'html5',
-          thumbnailGradient: getGradientForTheme(accentTheme),
-          accentColor: getAccentColor(accentTheme),
-          iconName: genre === 'Shooter' ? 'Rocket' : genre === 'Retro' ? 'Zap' : 'Gamepad2',
+          thumbnailGradient: 'from-blue-950 via-slate-900 to-black',
+          accentColor: '#3b82f6',
+          iconName: selectedIcon,
           controls: parsedControls.length > 0 ? parsedControls : [{ key: 'Mouse & Keys', action: 'Standard Game Controls' }],
         });
+        addMyCreatedGameId(created.id);
         onGameSaved(created);
       }
     } catch (err) {
@@ -236,6 +461,39 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
       setIsSubmitting(false);
     }
   };
+
+  if (!currentUser && (!isUpdating || !isAdmin)) {
+    return (
+      <div className="max-w-md mx-auto my-12 p-8 rounded-3xl bg-[#0e1422] border border-white/[0.1] text-center shadow-2xl space-y-5 animate-in fade-in">
+        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white mx-auto shadow-lg shadow-blue-950">
+          <Lock className="w-7 h-7" />
+        </div>
+        <div className="space-y-1">
+          <h2 className="text-xl font-bold text-white font-['Outfit']">Log In Required to Upload Games</h2>
+          <p className="text-xs text-slate-400">
+            You cannot upload or publish games unless you are logged in. Please log in or create a gamer account to continue.
+          </p>
+        </div>
+        <div className="flex flex-col gap-2.5 pt-2">
+          <button
+            type="button"
+            onClick={() => onRequireAuth?.()}
+            className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-950 flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <LogIn className="w-4 h-4" />
+            <span>Log In or Sign Up to Continue</span>
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white border border-white/[0.08] font-semibold text-xs transition-colors cursor-pointer"
+          >
+            Back to Arcade
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6">
@@ -254,7 +512,7 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
               <span>{isUpdating ? `Update Game: ${initialGameToUpdate?.title}` : 'Upload & Publish Game'}</span>
             </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Add your game's name, description, and link so everyone in the community can play it!
+              Set up your game's name, description, link, and front page cover art to publish it to the arcade!
             </p>
           </div>
         </div>
@@ -277,7 +535,7 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
             {isSubmitting ? (
               <>
                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                <span>Uploading...</span>
+                <span>Publishing...</span>
               </>
             ) : (
               <>
@@ -302,25 +560,14 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
         >
           <LinkIcon className="w-3.5 h-3.5" />
           <span>Game Link (URL)</span>
-          <span className="text-[10px] bg-blue-950 px-1.5 py-0.2 rounded border border-blue-400/30">Recommended</span>
         </button>
 
         <button
           type="button"
-          onClick={() => setMethod('file')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-            method === 'file'
-              ? 'bg-blue-600 text-white shadow-md'
-              : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
-          }`}
-        >
-          <Upload className="w-3.5 h-3.5" />
-          <span>Upload HTML5 File</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setMethod('code')}
+          onClick={() => {
+            setMethod('code');
+            setPreviewTab('sandbox');
+          }}
           className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
             method === 'code'
               ? 'bg-blue-600 text-white shadow-md'
@@ -328,11 +575,11 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
           }`}
         >
           <Code2 className="w-3.5 h-3.5" />
-          <span>Code Sandbox</span>
+          <span>Sandbox (Upload Code & Generate)</span>
         </button>
       </div>
 
-      {/* Main Form & Preview Two-Column Layout */}
+      {/* Main Two-Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: Form Inputs (7 Cols) */}
         <div className="lg:col-span-7 space-y-5">
@@ -347,8 +594,8 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
                 type="text"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Astro Odyssey, Gravity Ball 3D, Cyber Dash..."
-                className="w-full px-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] focus:border-blue-500 focus:bg-white/[0.07] text-white text-sm focus:outline-none transition-all"
+                placeholder="e.g. Roller Coaster Rush, Space Odyssey, Pixel Dungeon..."
+                className="w-full px-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] focus:border-blue-500 focus:bg-white/[0.07] text-white text-sm focus:outline-none transition-all font-['Outfit'] font-semibold"
                 required
               />
             </div>
@@ -362,7 +609,7 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Describe your game: objective, gameplay, controls, and what makes it fun..."
+                placeholder="Describe gameplay, controls, story, and why players will love your game..."
                 rows={3}
                 className="w-full px-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] focus:border-blue-500 focus:bg-white/[0.07] text-white text-xs focus:outline-none transition-all leading-relaxed"
                 required
@@ -386,7 +633,7 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
                     type="url"
                     value={gameLink}
                     onChange={handleLinkChange}
-                    placeholder="https://example.com/game or https://itch.io/embed/..."
+                    placeholder="https://itch.io/embed/... or https://your-game.vercel.app"
                     className="w-full pl-9 pr-24 py-2.5 rounded-xl bg-black/40 border border-white/[0.12] focus:border-blue-500 text-white text-xs font-mono focus:outline-none transition-all"
                   />
                   <LinkIcon className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
@@ -394,22 +641,25 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
                   {gameLink && (
                     <button
                       type="button"
-                      onClick={() => setPreviewKey(prev => prev + 1)}
+                      onClick={() => {
+                        setPreviewKey(prev => prev + 1);
+                        setPreviewTab('sandbox');
+                      }}
                       className="absolute right-2 top-1.5 px-2.5 py-1 text-[11px] font-semibold bg-blue-600/80 hover:bg-blue-600 text-white rounded-lg transition-colors cursor-pointer"
                     >
-                      Test Link
+                      Test Game
                     </button>
                   )}
                 </div>
 
                 <div className="text-[11px] text-slate-400 space-y-1 pt-1">
                   <p>
-                    Paste any link to your playable web game (Itch.io, GitHub Pages, Vercel, Netlify, Poki, or direct HTML5 game link).
+                    Paste any link to your playable game. When published, clicking your game card opens and plays it instantly!
                   </p>
                   
-                  {/* Quick test examples */}
+                  {/* Quick test sample links */}
                   <div className="flex flex-wrap items-center gap-2 pt-1">
-                    <span className="text-slate-400">Try sample link:</span>
+                    <span className="text-slate-400">Try sample game link:</span>
                     {sampleLinks.map((s) => (
                       <button
                         key={s.name}
@@ -417,7 +667,7 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
                         onClick={() => {
                           setGameLink(s.url);
                           if (!title) setTitle(s.name);
-                          if (!description) setDescription('Free online web game.');
+                          if (!description) setDescription('High-octane free browser game.');
                           setPreviewKey(prev => prev + 1);
                         }}
                         className="text-[10px] text-blue-400 hover:text-blue-300 bg-blue-950/60 px-2 py-0.5 rounded border border-blue-500/30 cursor-pointer"
@@ -430,71 +680,380 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
               </div>
             )}
 
-            {/* Method: FILE UPLOAD */}
-            {method === 'file' && (
-              <div
-                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={handleDrop}
-                className={`p-8 border-2 border-dashed rounded-2xl text-center space-y-3 transition-colors ${
-                  dragOver 
-                    ? 'border-blue-500 bg-blue-950/30' 
-                    : 'border-white/[0.12] bg-white/[0.02] hover:border-white/[0.2]'
-                }`}
-              >
-                <Upload className="w-8 h-8 text-blue-400 mx-auto" />
-                <div>
-                  <p className="text-sm font-semibold text-white">Drag & drop your game HTML file here</p>
-                  <p className="text-xs text-slate-400 mt-0.5">Supports standalone HTML5 games with embedded scripts or canvas</p>
-                </div>
-                <div>
-                  <label className="inline-block px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs rounded-xl shadow cursor-pointer transition-colors">
-                    <span>Browse File</span>
-                    <input
-                      type="file"
-                      accept=".html,.htm"
-                      onChange={(e) => e.target.files && handleFileUpload(e.target.files[0])}
-                      className="hidden"
-                    />
-                  </label>
-                </div>
-              </div>
-            )}
-
-            {/* Method: CODE SANDBOX */}
+            {/* Method: CODE SANDBOX (Upload code and it generates!) */}
             {method === 'code' && (
-              <div className="space-y-3">
+              <div className="space-y-4 p-5 rounded-2xl bg-blue-950/20 border border-blue-500/20">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                    HTML5 Game Code
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[11px] text-slate-400">Load template:</span>
-                    {GAME_TEMPLATES.map(t => (
+                  <div>
+                    <label className="text-xs font-bold text-blue-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <Code2 className="w-4 h-4 text-blue-400" />
+                      <span>Sandbox: Upload Your Code & Generate</span>
+                    </label>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Upload your HTML5 code file (.html, .htm, .js, .txt) and the sandbox automatically compiles and generates your game.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Status banner when generated */}
+                {sandboxGeneratedMsg && (
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-xs text-emerald-300 font-medium">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>{sandboxGeneratedMsg}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPreviewTab('sandbox');
+                        setPreviewKey(prev => prev + 1);
+                      }}
+                      className="px-2.5 py-1 text-[11px] bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors cursor-pointer"
+                    >
+                      View Live Game
+                    </button>
+                  </div>
+                )}
+
+                {/* Primary Upload Code Dropzone */}
+                <div
+                  onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragOver(false);
+                    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                      handleFileUpload(e.dataTransfer.files[0]);
+                    }
+                  }}
+                  className={`p-7 border-2 border-dashed rounded-xl text-center space-y-3 transition-all ${
+                    dragOver 
+                      ? 'border-blue-400 bg-blue-950/40 scale-[1.01]' 
+                      : 'border-blue-500/40 bg-black/40 hover:border-blue-400/70 hover:bg-black/60'
+                  }`}
+                >
+                  <Upload className="w-8 h-8 text-blue-400 mx-auto" />
+                  <div>
+                    <p className="text-sm font-bold text-white">
+                      Drop or upload your game code file here
+                    </p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Accepts .html, .htm, .js, or .txt. Automatically extracts title and generates your playable sandbox game.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl shadow-lg cursor-pointer transition-colors">
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Upload Code File & Generate</span>
+                      <input
+                        type="file"
+                        accept=".html,.htm,.js,.txt"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            handleFileUpload(e.target.files[0]);
+                          }
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {/* Quick 1-Click Game Generation Presets */}
+                <div className="pt-2 border-t border-white/[0.06] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-slate-300">
+                      Or Generate From Playable Preset Code:
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {GAME_TEMPLATES.map((tmpl) => (
                       <button
-                        key={t.id}
+                        key={tmpl.id}
                         type="button"
-                        onClick={() => handleSelectTemplate(t.id)}
-                        className="text-[10px] text-slate-300 hover:text-white bg-white/[0.06] hover:bg-white/[0.12] px-2 py-0.5 rounded border border-white/10 transition-colors cursor-pointer"
+                        onClick={() => handleSelectTemplate(tmpl.id)}
+                        className="p-2.5 rounded-xl bg-white/[0.03] hover:bg-white/[0.08] border border-white/[0.08] hover:border-blue-500/40 text-left transition-all cursor-pointer group"
                       >
-                        {t.name}
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-white group-hover:text-blue-300">
+                            ⚡ {tmpl.name}
+                          </span>
+                          <span className="text-[10px] font-mono text-slate-400 bg-white/[0.06] px-1.5 py-0.5 rounded">
+                            {tmpl.genre}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-400 mt-1 line-clamp-1">
+                          {tmpl.description}
+                        </p>
                       </button>
                     ))}
                   </div>
                 </div>
 
-                <textarea
-                  value={gameCode}
-                  onChange={(e) => {
-                    setGameCode(e.target.value);
-                    setPreviewKey(prev => prev + 1);
-                  }}
-                  rows={9}
-                  className="w-full p-3 font-mono text-xs bg-slate-950/80 border border-white/[0.08] rounded-xl text-slate-200 focus:outline-none focus:border-blue-500 leading-relaxed"
-                  placeholder="<!DOCTYPE html><html><body><canvas id='gameCanvas'></canvas>...</body></html>"
-                />
+                {/* Collapsible Direct Code Editor */}
+                <div className="pt-2 border-t border-white/[0.06]">
+                  <button
+                    type="button"
+                    onClick={() => setShowCodeEditor(!showCodeEditor)}
+                    className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white cursor-pointer py-1"
+                  >
+                    <Code2 className="w-3.5 h-3.5" />
+                    <span>{showCodeEditor ? 'Hide Code Editor' : 'Inspect or Edit Code Directly'}</span>
+                    {showCodeEditor ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  </button>
+
+                  {showCodeEditor && (
+                    <div className="mt-2 space-y-2">
+                      <textarea
+                        value={gameCode}
+                        onChange={(e) => {
+                          setGameCode(e.target.value);
+                          setPreviewKey(prev => prev + 1);
+                        }}
+                        rows={8}
+                        className="w-full p-3 font-mono text-xs bg-slate-950 border border-white/[0.1] rounded-xl text-slate-200 focus:outline-none focus:border-blue-500 leading-relaxed"
+                        placeholder="<!DOCTYPE html><html><body><canvas id='gameCanvas'></canvas>...</body></html>"
+                      />
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-slate-400">Edits regenerate the sandbox viewport automatically</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPreviewTab('sandbox');
+                            setPreviewKey(prev => prev + 1);
+                          }}
+                          className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-semibold transition-colors cursor-pointer"
+                        >
+                          Re-generate Sandbox
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
+
+            {/* Primary Field 4: Game Front Cover Poster (MANDATORY) */}
+            <div className="space-y-3 p-5 rounded-2xl bg-white/[0.02] border border-white/[0.08]">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <label className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                    <ImageIcon className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Game Front Cover Poster</span>
+                    <span className="px-2 py-0.5 text-[10px] font-mono text-amber-300 bg-amber-950/80 border border-amber-500/40 rounded-full font-bold">
+                      REQUIRED
+                    </span>
+                  </label>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    You must upload your game's front cover poster. It is displayed on all main screen cards and player headers.
+                  </p>
+                </div>
+                {coverImage && (
+                  <span className="text-[11px] text-emerald-400 flex items-center gap-1 font-medium bg-emerald-950/40 px-2 py-0.5 rounded-lg border border-emerald-500/30">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Cover Ready
+                  </span>
+                )}
+              </div>
+
+              {/* Requirement reminder banner if not yet provided */}
+              {!coverImage && (
+                <div className="p-3 rounded-xl bg-amber-950/25 border border-amber-500/30 flex items-center gap-2.5 text-xs text-amber-200">
+                  <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>Front cover is required to publish. Please upload your game front cover poster below.</span>
+                </div>
+              )}
+
+              {/* Cover Mode Switcher */}
+              <div className="flex items-center gap-1.5 p-1 rounded-xl bg-black/40 border border-white/[0.06] text-xs w-fit">
+                <button
+                  type="button"
+                  onClick={() => setCoverMode('upload')}
+                  className={`px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer ${
+                    coverMode === 'upload' 
+                      ? 'bg-blue-600 text-white shadow-sm' 
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Upload Cover File
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCoverMode('url')}
+                  className={`px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer ${
+                    coverMode === 'url' 
+                      ? 'bg-blue-600 text-white shadow-sm' 
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Paste Image URL
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCoverMode('designer')}
+                  className={`px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer ${
+                    coverMode === 'designer' 
+                      ? 'bg-blue-600 text-white shadow-sm' 
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Front Page Studio
+                </button>
+              </div>
+
+              {/* Front Page Mode: UPLOAD (Primary & Required) */}
+              {coverMode === 'upload' && (
+                <div className="space-y-3 pt-1">
+                  <div className="p-5 border-2 border-dashed border-white/[0.14] hover:border-blue-500/50 rounded-xl bg-black/40 text-center space-y-2.5 transition-colors">
+                    <ImageIcon className="w-7 h-7 text-blue-400 mx-auto" />
+                    <div>
+                      <p className="text-xs font-semibold text-white">Upload your game's front cover poster</p>
+                      <p className="text-[11px] text-slate-400">PNG, JPG, or WebP. 16:9 or 16:10 aspect ratio recommended.</p>
+                    </div>
+                    <div>
+                      <label className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl cursor-pointer transition-colors shadow-md">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>{coverImage ? 'Replace Cover Poster' : 'Browse Front Cover Image'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) {
+                              handleImageFile(e.target.files[0]);
+                            }
+                          }}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  {coverImage && (
+                    <div className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-950/30 border border-emerald-500/30 text-xs text-emerald-300">
+                      <div className="flex items-center gap-2.5">
+                        <img 
+                          src={coverImage} 
+                          alt="Cover thumbnail" 
+                          className="w-12 h-8 rounded-lg object-cover border border-emerald-500/40" 
+                        />
+                        <span className="font-medium">Front cover uploaded & ready for publishing!</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setCoverImage('')}
+                        className="text-rose-400 hover:text-rose-300 font-semibold px-2 py-1 cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Front Page Mode: URL */}
+              {coverMode === 'url' && (
+                <div className="space-y-1.5 pt-1">
+                  <input
+                    type="url"
+                    value={coverImage}
+                    onChange={(e) => setCoverImage(e.target.value)}
+                    placeholder="https://images.unsplash.com/... or https://i.imgur.com/your-poster.png"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/[0.12] focus:border-blue-500 text-white text-xs font-mono focus:outline-none"
+                  />
+                  <p className="text-[10px] text-slate-400">
+                    Paste any public image URL for your game poster.
+                  </p>
+                </div>
+              )}
+
+              {/* Front Page Mode: DESIGNER */}
+              {coverMode === 'designer' && (
+                <div className="space-y-3 pt-1">
+                  {/* Themes */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-semibold text-slate-300">
+                      Front Page Backdrop Theme
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {FRONT_PAGE_THEMES.map((th) => (
+                        <button
+                          key={th.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedTheme(th.id);
+                            // Also set a placeholder cover image to satisfy requirement
+                            setCoverImage(`data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="375"><rect width="100%" height="100%" fill="%230f172a"/><text x="50%" y="50%" font-family="sans-serif" font-size="28" font-weight="bold" fill="%2338bdf8" dominant-baseline="middle" text-anchor="middle">${encodeURIComponent(title || 'Front Page')}</text></svg>`);
+                          }}
+                          className={`p-2.5 rounded-xl text-left transition-all border cursor-pointer ${
+                            selectedTheme === th.id
+                              ? 'border-blue-500 bg-blue-950/40 text-white shadow-md'
+                              : 'border-white/[0.08] bg-white/[0.02] text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          <div className={`w-full h-5 rounded-lg bg-gradient-to-r ${th.gradient} mb-1.5 shadow-sm`} />
+                          <span className="text-xs font-semibold block truncate">{th.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Icon Emblem */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-semibold text-slate-300">
+                      Hero Emblem / Mascot
+                    </label>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {['Gamepad2', 'Rocket', 'Target', 'Car', 'Ghost', 'Sword', 'Trophy'].map((ic) => (
+                        <button
+                          key={ic}
+                          type="button"
+                          onClick={() => {
+                            setSelectedIcon(ic);
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-medium border cursor-pointer transition-all ${
+                            selectedIcon === ic
+                              ? 'border-blue-500 bg-blue-950/60 text-white shadow-sm'
+                              : 'border-white/[0.06] bg-white/[0.02] text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          {ic}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Top Corner Badge Selection */}
+              <div className="pt-2 border-t border-white/[0.06] space-y-1.5">
+                <label className="text-[11px] font-semibold text-slate-300">
+                  Top Corner Badge
+                </label>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {[
+                    { id: 'hot', label: '🔥 HOT' },
+                    { id: 'update', label: '🔄 UPDATED' },
+                    { id: 'new', label: '⚡ NEW' },
+                    { id: 'star', label: '🌟 TOP PICK' },
+                    { id: 'stream', label: '📺 STREAM' },
+                    { id: 'none', label: 'None' },
+                  ].map((b) => (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => setSelectedBadge(b.id as any)}
+                      className={`px-3 py-1 rounded-lg text-xs font-medium border cursor-pointer transition-all ${
+                        selectedBadge === b.id
+                          ? 'border-blue-500 bg-blue-950/80 text-white shadow-sm'
+                          : 'border-white/[0.06] bg-white/[0.02] text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {b.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
 
             {/* Collapsible Metadata Section */}
             <div className="border-t border-white/[0.08] pt-4">
@@ -523,6 +1082,7 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
                       >
                         <option value="Action" className="bg-slate-900">Action</option>
                         <option value="Arcade" className="bg-slate-900">Arcade</option>
+                        <option value="Educational" className="bg-slate-900">Educational</option>
                         <option value="Shooter" className="bg-slate-900">Shooter</option>
                         <option value="Puzzle" className="bg-slate-900">Puzzle</option>
                         <option value="2 Player" className="bg-slate-900">2 Player</option>
@@ -564,7 +1124,7 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
                         type="text"
                         value={changelog}
                         onChange={(e) => setChangelog(e.target.value)}
-                        placeholder="What's new in this version?"
+                        placeholder="What's new in this release?"
                         className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white text-xs focus:outline-none focus:border-blue-500"
                       />
                     </div>
@@ -580,120 +1140,151 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
                       className="w-full px-3 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] text-white text-xs font-mono focus:outline-none focus:border-blue-500"
                     />
                   </div>
-
-                  {/* Theme Accent Color */}
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-400">Accent Style (No Neon)</label>
-                    <div className="flex items-center gap-3">
-                      {[
-                        { id: 'blue', name: 'Royal Blue', color: 'bg-blue-600' },
-                        { id: 'emerald', name: 'Emerald', color: 'bg-emerald-600' },
-                        { id: 'amber', name: 'Warm Amber', color: 'bg-amber-600' },
-                        { id: 'slate', name: 'Monochrome Slate', color: 'bg-slate-600' },
-                      ].map((th) => (
-                        <button
-                          key={th.id}
-                          type="button"
-                          onClick={() => setAccentTheme(th.id)}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs cursor-pointer transition-all ${
-                            accentTheme === th.id
-                              ? 'border-white/40 bg-white/[0.1] text-white font-semibold'
-                              : 'border-white/[0.06] text-slate-400 hover:text-white'
-                          }`}
-                        >
-                          <span className={`w-2.5 h-2.5 rounded-full ${th.color}`} />
-                          <span>{th.name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* Right Column: Live Playable Preview (5 Cols) */}
+        {/* Right Column: Live Front Page & Sandbox Preview (5 Cols) */}
         <div className="lg:col-span-5 space-y-4">
           <div className="p-5 rounded-2xl glass-panel border border-white/[0.08] space-y-4 sticky top-24">
-            <div className="flex items-center justify-between">
+            {/* Header & Tabs */}
+            <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
               <div className="flex items-center gap-2">
-                <Play className="w-4 h-4 text-emerald-400" />
-                <h3 className="text-sm font-bold text-white font-['Outfit']">
-                  Live Game Preview
-                </h3>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPreviewKey(prev => prev + 1)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
-                title="Reload preview"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={() => setPreviewTab('frontpage')}
+                  className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    previewTab === 'frontpage'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Front Page Preview
+                </button>
 
-            {/* Preview Frame */}
-            <div className="relative aspect-[16/10] w-full rounded-xl overflow-hidden bg-black border border-white/[0.08] shadow-inner flex items-center justify-center">
-              {method === 'link' && gameLink.trim() ? (
-                <iframe
-                  key={previewKey + '-' + gameLink}
-                  src={cleanUrl(gameLink)}
-                  title="Game Link Preview"
-                  sandbox="allow-scripts allow-modals allow-same-origin allow-pointer-lock allow-forms allow-popups allow-fullscreen allow-orientation-lock allow-presentation"
-                  className="w-full h-full border-0 block bg-black"
-                  allow="autoplay; fullscreen; gamepad"
-                />
-              ) : method !== 'link' && gameCode.trim() ? (
-                <iframe
-                  key={previewKey}
-                  srcDoc={gameCode}
-                  title="Code Preview"
-                  sandbox="allow-scripts allow-modals allow-same-origin allow-pointer-lock"
-                  className="w-full h-full border-0 block bg-black"
-                  allow="autoplay; fullscreen; gamepad"
-                />
-              ) : (
-                <div className="text-center p-6 space-y-2">
-                  <Globe className="w-8 h-8 text-slate-600 mx-auto" />
-                  <p className="text-xs text-slate-400">
-                    {method === 'link'
-                      ? 'Enter your game link to test and preview the live game.'
-                      : 'Upload an HTML file or write code to see the preview here.'}
-                  </p>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setPreviewTab('sandbox')}
+                  className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    previewTab === 'sandbox'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Playable Game
+                </button>
+              </div>
+
+              {previewTab === 'sandbox' && (
+                <button
+                  type="button"
+                  onClick={() => setPreviewKey(prev => prev + 1)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+                  title="Reload preview"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </button>
               )}
             </div>
 
-            {/* Preview Information Card */}
-            <div className="p-3.5 rounded-xl bg-white/[0.03] border border-white/[0.06] space-y-2 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-white text-sm truncate">
-                  {title.trim() || 'Untitled Game'}
-                </span>
-                <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/20">
-                  v{version || '1.0.0'}
-                </span>
-              </div>
-              <p className="text-slate-400 text-[11px] line-clamp-2">
-                {description.trim() || 'No description provided yet.'}
-              </p>
-              <div className="flex items-center justify-between pt-1 text-[10px] text-slate-400">
-                <span>Genre: <strong className="text-slate-300">{genre}</strong></span>
-                <span>By: <strong className="text-slate-300">{author.trim() || 'Sphere Creator'}</strong></span>
-              </div>
-            </div>
+            {/* TAB 1: FRONT PAGE PREVIEW */}
+            {previewTab === 'frontpage' && (
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <span className="text-[11px] font-semibold text-slate-300">
+                    Main Screen Card (16:10 Front Page)
+                  </span>
+                  <div className="aspect-[16/10] w-full rounded-2xl overflow-hidden glass-card border border-white/[0.12] shadow-xl">
+                    <FrontPageCover
+                      title={title || 'Game Title Preview'}
+                      genre={genre}
+                      author={author || 'Your Name'}
+                      coverImage={coverImage}
+                      badge={selectedBadge}
+                      accentTheme={selectedTheme}
+                      iconName={selectedIcon}
+                      showHoverOverlay={true}
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-400 pt-1">
+                    Hover to see the instant Play button. Clicking this on the main screen immediately launches your game!
+                  </p>
+                </div>
 
-            {/* Publish CTA Button */}
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={isSubmitting || !title.trim() || (method === 'link' && !gameLink.trim())}
-              className="w-full py-3 text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-xl shadow-lg shadow-blue-950 disabled:opacity-50 transition-all flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>{isUpdating ? 'Publish Update to Arcade' : 'Publish Game & Play Now'}</span>
-            </button>
+                {/* Squircle Preview */}
+                <div className="pt-2 border-t border-white/[0.06] space-y-1">
+                  <span className="text-[11px] font-semibold text-slate-300">
+                    "Continue Playing" Squircle Preview
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <div className="w-20 h-20 rounded-2xl overflow-hidden glass-card border border-white/[0.12] shadow-md shrink-0">
+                      <FrontPageCover
+                        title={title || 'Game'}
+                        genre={genre}
+                        author={author || 'You'}
+                        coverImage={coverImage}
+                        badge={selectedBadge}
+                        accentTheme={selectedTheme}
+                        iconName={selectedIcon}
+                        aspect="square"
+                        showHoverOverlay={true}
+                      />
+                    </div>
+                    <div className="text-[11px] text-slate-400 space-y-0.5">
+                      <p className="font-semibold text-slate-200">Home Bar App Icon</p>
+                      <p>Renders at the top of the main screen in the "Continue playing" tray.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: PLAYABLE GAME RUNNER */}
+            {previewTab === 'sandbox' && (
+              <div className="space-y-2">
+                <div className="aspect-video w-full rounded-xl overflow-hidden border border-white/[0.1] bg-black relative">
+                  {method === 'link' ? (
+                    gameLink ? (
+                      <iframe
+                        key={`preview-link-${previewKey}`}
+                        src={cleanUrl(gameLink)}
+                        title="Link Preview"
+                        className="w-full h-full border-none"
+                        allow="autoplay; fullscreen; gamepad"
+                        sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center text-slate-400 space-y-2">
+                        <Globe className="w-8 h-8 text-slate-600" />
+                        <span className="text-xs">Enter a valid URL in the left form to preview game.</span>
+                      </div>
+                    )
+                  ) : (
+                    <iframe
+                      key={`preview-code-${previewKey}`}
+                      srcDoc={gameCode}
+                      title="Code Preview"
+                      className="w-full h-full border-none"
+                      sandbox="allow-scripts"
+                    />
+                  )}
+                </div>
+
+                {method === 'link' && gameLink && (
+                  <a
+                    href={cleanUrl(gameLink)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300"
+                  >
+                    <span>Open in new tab</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

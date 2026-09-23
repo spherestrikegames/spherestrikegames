@@ -9,8 +9,12 @@ export async function fetchAllGames(): Promise<Game[]> {
     if (res.ok) {
       const data = await res.json();
       if (data.success && Array.isArray(data.games)) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data.games));
-        return data.games;
+        const cleaned = data.games.filter((g: Game) => 
+          g.id !== 'game-1790122769939-ad7ce' && 
+          g.title.toLowerCase().trim() !== 'spherestrike'
+        );
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
+        return cleaned;
       }
     }
   } catch (e) {
@@ -21,7 +25,13 @@ export async function fetchAllGames(): Promise<Game[]> {
   const cached = localStorage.getItem(STORAGE_KEY);
   if (cached) {
     try {
-      return JSON.parse(cached);
+      const parsed: Game[] = JSON.parse(cached);
+      const cleaned = parsed.filter(g => 
+        g.id !== 'game-1790122769939-ad7ce' && 
+        g.title.toLowerCase().trim() !== 'spherestrike'
+      );
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
+      return cleaned;
     } catch {
       // ignore
     }
@@ -74,6 +84,8 @@ export async function createGame(payload: Partial<Game> & { version?: string; ch
     code: code,
     type: gameType,
     embedUrl: embedUrl,
+    coverImage: payload.coverImage,
+    badge: payload.badge || 'new',
     thumbnailGradient: payload.thumbnailGradient || 'from-blue-950 via-slate-900 to-black',
     accentColor: payload.accentColor || '#3b82f6',
     iconName: payload.iconName || 'Gamepad2',
@@ -104,6 +116,8 @@ export async function updateGame(
     changelog: string;
     code?: string;
     embedUrl?: string;
+    coverImage?: string;
+    badge?: 'hot' | 'update' | 'new' | 'star' | 'stream' | 'none';
     type?: 'html5' | 'embed';
     author?: string;
     controls?: { key: string; action: string }[];
@@ -143,6 +157,8 @@ export async function updateGame(
   game.currentVersion = payload.version;
   game.code = code;
   game.embedUrl = embedUrl;
+  if (payload.coverImage !== undefined) game.coverImage = payload.coverImage;
+  if (payload.badge !== undefined) game.badge = payload.badge;
   if (embedUrl) game.type = 'embed';
   game.updatedAt = now;
   game.versions.unshift({

@@ -26,7 +26,11 @@ function loadGames() {
   try {
     if (fs.existsSync(DATA_FILE)) {
       const raw = fs.readFileSync(DATA_FILE, 'utf-8');
-      games = JSON.parse(raw);
+      const parsed: Game[] = JSON.parse(raw);
+      games = parsed.filter(g => g.id !== 'game-1790122769939-ad7ce' && g.title.toLowerCase().trim() !== 'spherestrike');
+      if (games.length !== parsed.length) {
+        saveGames();
+      }
     } else {
       games = [...INITIAL_GAMES];
       saveGames();
@@ -102,6 +106,8 @@ app.post('/api/games', (req: Request, res: Response) => {
       code: code,
       type: gameType,
       embedUrl: embedUrl,
+      coverImage: body.coverImage || undefined,
+      badge: body.badge || 'new',
       thumbnailGradient: body.thumbnailGradient || 'from-blue-950 via-slate-900 to-black',
       accentColor: body.accentColor || '#3b82f6',
       iconName: body.iconName || 'Gamepad2',
@@ -169,6 +175,8 @@ app.put('/api/games/:id', (req: Request, res: Response) => {
     game.currentVersion = newVersion;
     game.code = code;
     game.embedUrl = embedUrl;
+    if (body.coverImage !== undefined) game.coverImage = body.coverImage;
+    if (body.badge !== undefined) game.badge = body.badge;
     if (embedUrl) game.type = 'embed';
     game.versions.unshift(versionEntry);
     game.updatedAt = now;

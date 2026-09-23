@@ -9,7 +9,8 @@ export type GameGenre =
   | 'Shooter' 
   | 'Casual' 
   | 'Multiplayer' 
-  | 'Sports';
+  | 'Sports'
+  | 'Educational';
 
 export interface GameControl {
   key: string;
@@ -48,6 +49,8 @@ export interface Game {
   code: string;
   type: 'html5' | 'embed';
   embedUrl?: string;
+  coverImage?: string; // Custom front page / poster image (data URL, upload, or web URL)
+  badge?: 'hot' | 'update' | 'new' | 'star' | 'stream' | 'none';
   thumbnailGradient: string;
   accentColor: string;
   iconName: string;

@@ -1,17 +1,27 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Navbar } from './components/Navbar';
-import { HeroBento } from './components/HeroBento';
 import { CategoryBar } from './components/CategoryBar';
 import { GameCard } from './components/GameCard';
+import { EmptySlotCard } from './components/EmptySlotCard';
 import { GamePlayer } from './components/GamePlayer';
 import { GameUploader } from './components/GameUploader';
+import { CreatedGamesSidebar } from './components/CreatedGamesSidebar';
+import { AuthModal } from './components/AuthModal';
+import { AdminSecretTerminal } from './components/AdminSecretTerminal';
+import { UserProfileModal } from './components/UserProfileModal';
+import { SphereStrikeLogo } from './components/SphereStrikeLogo';
 import { Game, GameGenre } from './types/game';
-import { fetchAllGames, deleteGame, clearAllGames } from './utils/api';
+import { User, AuthMode } from './types/user';
+import { fetchAllGames, deleteGame } from './utils/api';
+import { isUserCreatedGame, removeMyCreatedGameId } from './utils/myGames';
+import { getCurrentUser, logoutUser } from './utils/auth';
 import { 
   Sparkles, Flame, History, SearchX, Plus, RefreshCw, 
-  Gamepad2, Heart, Award, ArrowRight
+  Gamepad2, Heart, Award, ArrowRight, ChevronRight, Edit3, Grid3X3
 } from 'lucide-react';
+
+const MAIN_SCREEN_TOTAL_SLOTS = 65;
 
 export default function App() {
   const [games, setGames] = useState<Game[]>([]);
@@ -20,6 +30,65 @@ export default function App() {
   const [currentView, setCurrentView] = useState<'arcade' | 'trending' | 'updated' | 'favorites' | 'studio' | 'player'>('arcade');
   const [selectedGame, setSelectedGame] = useState<Game | null>(null);
   const [gameToUpdate, setGameToUpdate] = useState<Game | null>(null);
+
+  // Side mode: My Created Games (View and Edit Info)
+  const [isCreatedGamesOpen, setIsCreatedGamesOpen] = useState<boolean>(false);
+
+  // User Authentication State
+  const [currentUser, setCurrentUser] = useState<User | null>(() => getCurrentUser());
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [authMode, setAuthMode] = useState<AuthMode>('login');
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
+
+  const handleOpenLogin = () => {
+    setAuthMode('login');
+    setIsAuthModalOpen(true);
+  };
+
+  const handleOpenSignup = () => {
+    setAuthMode('signup');
+    setIsAuthModalOpen(true);
+  };
+
+  const handleOpenProfile = () => {
+    setIsProfileModalOpen(true);
+  };
+
+  const handleLogout = () => {
+    logoutUser();
+    setCurrentUser(null);
+  };
+
+  const handleAuthSuccess = (user: User) => {
+    setCurrentUser(user);
+  };
+
+  // Admin Mode state (unlocked via secret code "MacBook Air" at bottom of main menu)
+  const [isAdmin, setIsAdmin] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('spherestrike_admin_access') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleUnlockAdmin = () => {
+    setIsAdmin(true);
+    try {
+      localStorage.setItem('spherestrike_admin_access', 'true');
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleLockAdmin = () => {
+    setIsAdmin(false);
+    try {
+      localStorage.removeItem('spherestrike_admin_access');
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   // Filters
   const [activeGenre, setActiveGenre] = useState<GameGenre>('All');
@@ -45,14 +114,10 @@ export default function App() {
     });
   };
 
-  // Load games from API / cache
+  // Load games from API
   const loadGamesData = async () => {
     setIsLoading(true);
     try {
-      // Clear legacy cache from older projects
-      try {
-        localStorage.removeItem('hyperarcade_games_cache');
-      } catch {}
       const data = await fetchAllGames();
       setGames(data);
     } catch (err) {
@@ -64,27 +129,21 @@ export default function App() {
 
   useEffect(() => {
     loadGamesData();
-    // Default sidebar behavior based on screen size
     if (window.innerWidth < 1024) {
       setSidebarOpen(false);
     }
   }, []);
+
+  // Games that the user made
+  const myCreatedGames = useMemo(() => {
+    return games.filter(g => isUserCreatedGame(g));
+  }, [games]);
 
   // Recently updated games count
   const updatedGamesCount = useMemo(() => {
     const tenDaysAgo = Date.now() - 10 * 24 * 60 * 60 * 1000;
     return games.filter(g => new Date(g.updatedAt).getTime() > tenDaysAgo && g.versions.length > 1).length;
   }, [games]);
-
-  // Primary flagship game (Sphere Strike)
-  const primaryFlagshipGame = useMemo(() => {
-    return games.find(g => g.id === 'game-sphere-strike') || games[0] || null;
-  }, [games]);
-
-  // Secondary bento games
-  const secondaryBentoGames = useMemo(() => {
-    return games.filter(g => g.id !== primaryFlagshipGame?.id).slice(0, 4);
-  }, [games, primaryFlagshipGame]);
 
   // Filtered and sorted games
   const filteredGames = useMemo(() => {
@@ -139,20 +198,17 @@ export default function App() {
     return list;
   }, [games, currentView, activeGenre, searchQuery, sortBy, favoriteIds]);
 
-  // Recently updated curated list
-  const recentlyUpdatedGames = useMemo(() => {
-    return games
-      .filter(g => g.versions.length > 1)
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-      .slice(0, 4);
-  }, [games]);
-
-  // Trending hits curated list
-  const trendingGames = useMemo(() => {
-    return [...games]
-      .sort((a, b) => (b.plays || 0) - (a.plays || 0))
-      .slice(0, 4);
-  }, [games]);
+  // Exact 65 uniform slots for the main screen
+  const mainScreenSlots = useMemo(() => {
+    const slots = [];
+    for (let i = 0; i < MAIN_SCREEN_TOTAL_SLOTS; i++) {
+      slots.push({
+        slotNumber: i + 1,
+        game: filteredGames[i] || null,
+      });
+    }
+    return slots;
+  }, [filteredGames]);
 
   // Navigation handlers
   const handleSelectGame = (game: Game) => {
@@ -162,12 +218,22 @@ export default function App() {
   };
 
   const handleUpdateGame = (game: Game) => {
+    if (!currentUser && !isAdmin) {
+      setAuthMode('login');
+      setIsAuthModalOpen(true);
+      return;
+    }
     setGameToUpdate(game);
     setCurrentView('studio');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleOpenUpload = () => {
+    if (!currentUser) {
+      setAuthMode('login');
+      setIsAuthModalOpen(true);
+      return;
+    }
     setGameToUpdate(null);
     setCurrentView('studio');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -192,8 +258,21 @@ export default function App() {
     handleSelectGame(savedGame);
   };
 
+  const handleGameUpdatedFromSide = (updatedGame: Game) => {
+    setGames(prev => {
+      const idx = prev.findIndex(g => g.id === updatedGame.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = updatedGame;
+        return next;
+      }
+      return [updatedGame, ...prev];
+    });
+  };
+
   const handleDeleteGame = async (gameId: string) => {
     await deleteGame(gameId);
+    removeMyCreatedGameId(gameId);
     setGames(prev => prev.filter(g => g.id !== gameId));
     if (selectedGame?.id === gameId) {
       setSelectedGame(null);
@@ -203,12 +282,17 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#0b0f19] text-slate-100 flex flex-col font-['Plus_Jakarta_Sans',sans-serif]">
-      {/* CrazyGames Left Sidebar */}
+      {/* Sphere Strike Left Sidebar */}
       <Sidebar
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
         currentView={currentView}
         onNavigate={(view) => {
+          if (view === 'studio' && !currentUser) {
+            setAuthMode('login');
+            setIsAuthModalOpen(true);
+            return;
+          }
           setCurrentView(view as any);
           if (view !== 'player') setSelectedGame(null);
           window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -220,8 +304,10 @@ export default function App() {
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
         onOpenUpload={handleOpenUpload}
+        onOpenCreatedGames={() => setIsCreatedGamesOpen(true)}
         updatedGamesCount={updatedGamesCount}
         favoritesCount={favoriteIds.length}
+        myCreatedGamesCount={myCreatedGames.length}
       />
 
       {/* Main Content Area - shifts with sidebar on desktop */}
@@ -230,7 +316,7 @@ export default function App() {
           sidebarOpen ? 'md:ml-64' : 'md:ml-20'
         }`}
       >
-        {/* CrazyGames Top Header */}
+        {/* Top Header */}
         <Navbar
           onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
           searchQuery={searchQuery}
@@ -238,13 +324,14 @@ export default function App() {
             setSearchQuery(q);
             if (currentView !== 'arcade') setCurrentView('arcade');
           }}
-          onOpenUpload={handleOpenUpload}
-          onRandomGame={handleRandomGame}
-          onOpenStudio={() => {
-            setGameToUpdate(null);
-            setCurrentView('studio');
-          }}
-          updatedGamesCount={updatedGamesCount}
+          onToggleCreatedGames={() => setIsCreatedGamesOpen(!isCreatedGamesOpen)}
+          myCreatedGamesCount={myCreatedGames.length}
+          currentUser={currentUser}
+          isAdmin={isAdmin}
+          onOpenLogin={handleOpenLogin}
+          onOpenSignup={handleOpenSignup}
+          onLogout={handleLogout}
+          onOpenProfile={handleOpenProfile}
         />
 
         {/* Primary Page Canvas */}
@@ -261,6 +348,9 @@ export default function App() {
               onSelectRelatedGame={handleSelectGame}
               allGames={games}
               onDeleteGame={handleDeleteGame}
+              isAdmin={isAdmin}
+              currentUser={currentUser}
+              onOpenLogin={handleOpenLogin}
             />
           )}
 
@@ -273,12 +363,58 @@ export default function App() {
               }}
               onGameSaved={handleGameSaved}
               initialGameToUpdate={gameToUpdate}
+              currentUser={currentUser}
+              isAdmin={isAdmin}
+              onRequireAuth={() => {
+                setAuthMode('login');
+                setIsAuthModalOpen(true);
+              }}
             />
           )}
 
-          {/* VIEW: ARCADE / DIRECTORY (Default CrazyGames layout) */}
+          {/* VIEW: ARCADE / 65 SLOTS DIRECTORY */}
           {(currentView === 'arcade' || currentView === 'trending' || currentView === 'updated' || currentView === 'favorites') && (
-            <div className="space-y-8">
+            <div className="space-y-6">
+              {/* Sphere Strike Hero Banner with Official Logo */}
+              {currentView === 'arcade' && !searchQuery.trim() && activeGenre === 'All' && (
+                <div className="relative rounded-3xl overflow-hidden border border-white/[0.1] bg-gradient-to-br from-[#0c1424] via-[#080d19] to-[#04060c] p-6 sm:p-8 shadow-2xl">
+                  {/* Glowing ambient orbs */}
+                  <div className="absolute -top-16 -left-16 w-64 h-64 rounded-full bg-blue-600/15 blur-3xl pointer-events-none" />
+                  <div className="absolute -bottom-16 -right-16 w-64 h-64 rounded-full bg-amber-500/15 blur-3xl pointer-events-none" />
+
+                  <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
+                    {/* Official Sphere Strike Logo (matching image.png) */}
+                    <div className="flex items-center justify-center md:justify-start">
+                      <SphereStrikeLogo variant="horizontal" size="lg" />
+                    </div>
+
+                    {/* Stats & Quick Actions */}
+                    <div className="flex flex-wrap items-center justify-center md:justify-end gap-3 text-xs">
+                      <div className="px-3.5 py-2 rounded-xl bg-white/[0.04] border border-white/[0.08] backdrop-blur-md">
+                        <span className="text-slate-400">Total Grid Slots: </span>
+                        <span className="font-bold font-mono text-cyan-400">65 Uniform Slots</span>
+                      </div>
+
+                      <button
+                        onClick={() => setIsCreatedGamesOpen(true)}
+                        className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 font-semibold transition-all cursor-pointer shadow-sm"
+                      >
+                        <Edit3 className="w-3.5 h-3.5 text-amber-400" />
+                        <span>My Created Games ({myCreatedGames.length})</span>
+                      </button>
+
+                      <button
+                        onClick={handleOpenUpload}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold transition-all shadow-md cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Upload Game</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Category Pills Row Subnav */}
               <CategoryBar
                 activeGenre={activeGenre}
@@ -291,111 +427,36 @@ export default function App() {
                 totalGamesCount={filteredGames.length}
               />
 
-              {/* Show CrazyGames Bento Hero only on clean Home View when games exist */}
-              {currentView === 'arcade' && !searchQuery.trim() && activeGenre === 'All' && primaryFlagshipGame && (
-                <section aria-label="Featured Bento Section">
-                  <HeroBento
-                    primaryGame={primaryFlagshipGame}
-                    secondaryGames={secondaryBentoGames}
-                    onPlayGame={handleSelectGame}
-                    onUpdateGame={handleUpdateGame}
-                  />
-                </section>
-              )}
-
-              {/* Curated Section: Recently Updated */}
-              {currentView === 'arcade' && !searchQuery.trim() && activeGenre === 'All' && recentlyUpdatedGames.length > 0 && (
-                <section className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <History className="w-4 h-4 text-emerald-400" />
-                      <h3 className="text-base font-bold text-white font-['Outfit'] tracking-tight">
-                        Recently Updated Releases
-                      </h3>
-                      <span className="text-[11px] font-mono text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/20">
-                        Live Versions
-                      </span>
-                    </div>
-
-                    <button
-                      onClick={() => setCurrentView('updated')}
-                      className="text-xs font-semibold text-blue-400 hover:text-blue-300 flex items-center gap-1 cursor-pointer"
-                    >
-                      <span>View All Updates</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {recentlyUpdatedGames.map((game) => (
-                      <GameCard
-                        key={game.id}
-                        game={game}
-                        onPlay={handleSelectGame}
-                        onUpdate={handleUpdateGame}
-                        isFavorited={favoriteIds.includes(game.id)}
-                        onToggleFavorite={toggleFavorite}
-                      />
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              {/* Curated Section: Trending Now */}
-              {currentView === 'arcade' && !searchQuery.trim() && activeGenre === 'All' && trendingGames.length > 0 && (
-                <section className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Flame className="w-4 h-4 text-amber-400" />
-                      <h3 className="text-base font-bold text-white font-['Outfit'] tracking-tight">
-                        Trending Community Hits
-                      </h3>
-                    </div>
-
-                    <button
-                      onClick={() => setCurrentView('trending')}
-                      className="text-xs font-semibold text-blue-400 hover:text-blue-300 flex items-center gap-1 cursor-pointer"
-                    >
-                      <span>See More</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {trendingGames.map((game) => (
-                      <GameCard
-                        key={game.id}
-                        game={game}
-                        onPlay={handleSelectGame}
-                        onUpdate={handleUpdateGame}
-                        isFavorited={favoriteIds.includes(game.id)}
-                        onToggleFavorite={toggleFavorite}
-                      />
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              {/* Main Catalog Grid */}
+              {/* 65 EQUAL SIZE SLOTS GRID (NO SPOTLIGHT GAMES - ALL SAME SIZE) */}
               <section className="space-y-4">
                 <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
-                  <div>
-                    <h3 className="text-lg font-bold text-white font-['Outfit'] tracking-tight">
-                      {searchQuery
-                        ? `Search Results for "${searchQuery}"`
-                        : currentView === 'trending'
-                        ? 'All Trending Games'
-                        : currentView === 'updated'
-                        ? 'Recently Updated Versions'
-                        : currentView === 'favorites'
-                        ? 'My Favorite Games'
-                        : activeGenre === 'All'
-                        ? 'All Free Web Games'
-                        : `${activeGenre} Games`}
-                    </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Showing {filteredGames.length} {filteredGames.length === 1 ? 'game' : 'games'} available to play instantly
-                    </p>
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-1.5 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400">
+                      <Grid3X3 className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-base sm:text-lg font-bold text-white font-['Outfit'] tracking-tight flex items-center gap-2">
+                        <span>
+                          {searchQuery
+                            ? `Search Results for "${searchQuery}"`
+                            : currentView === 'trending'
+                            ? 'All Trending Games'
+                            : currentView === 'updated'
+                            ? 'Recently Updated Versions'
+                            : currentView === 'favorites'
+                            ? 'My Favorite Games'
+                            : activeGenre !== 'All'
+                            ? `${activeGenre} Games`
+                            : 'Main Screen Arcade'}
+                        </span>
+                        <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-blue-950 text-blue-300 border border-blue-500/30">
+                          65 Slots
+                        </span>
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        All games have the exact same size slot · Click any card to play or click empty slots to upload
+                      </p>
+                    </div>
                   </div>
 
                   {(searchQuery || activeGenre !== 'All' || currentView !== 'arcade') && (
@@ -412,128 +473,95 @@ export default function App() {
                   )}
                 </div>
 
-                {/* Loading state */}
-                {isLoading && (
-                  <div className="py-20 flex flex-col items-center justify-center text-center space-y-3">
-                    <RefreshCw className="w-8 h-8 text-blue-400 animate-spin" />
-                    <p className="text-sm text-slate-400">Loading Sphere Strike Games catalog...</p>
-                  </div>
-                )}
-
-                {/* Empty State when entire arcade has no games */}
-                {!isLoading && games.length === 0 && (
-                  <div className="py-16 px-6 rounded-2xl glass-panel border border-white/[0.08] text-center max-w-xl mx-auto space-y-5 bg-gradient-to-b from-slate-900/40 to-slate-950/70 shadow-xl">
-                    <div className="w-14 h-14 rounded-2xl bg-blue-600/10 border border-blue-500/20 text-blue-400 mx-auto flex items-center justify-center">
-                      <Gamepad2 className="w-7 h-7" />
-                    </div>
-                    <div className="space-y-2">
-                      <h4 className="text-xl font-bold text-white font-['Outfit']">
-                        No Games in the Arcade Yet
-                      </h4>
-                      <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                        All pre-created games have been removed. Sphere Strike Games is clean and ready! Upload an HTML5 game file or launch the Sandbox Studio to create and publish games for everyone to play.
-                      </p>
-                    </div>
-
-                    <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
-                      <button
-                        onClick={handleOpenUpload}
-                        className="px-5 py-2.5 text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-md cursor-pointer flex items-center gap-2"
-                      >
-                        <Plus className="w-4 h-4" />
-                        <span>Upload Your First Game</span>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setGameToUpdate(null);
-                          setCurrentView('studio');
-                        }}
-                        className="px-5 py-2.5 text-xs font-semibold bg-white/[0.05] hover:bg-white/[0.1] text-slate-200 border border-white/10 rounded-xl transition-colors cursor-pointer"
-                      >
-                        Launch Sandbox Studio
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Empty state when filters/search yield no matches */}
-                {!isLoading && games.length > 0 && filteredGames.length === 0 && (
-                  <div className="py-16 px-4 rounded-2xl glass-panel border border-white/[0.08] text-center max-w-lg mx-auto space-y-4">
-                    <SearchX className="w-12 h-12 text-slate-500 mx-auto" />
-                    <div className="space-y-1">
-                      <h4 className="text-base font-bold text-white">No games found</h4>
-                      <p className="text-xs text-slate-400">
-                        {currentView === 'favorites'
-                          ? 'You haven’t added any favorite games yet. Click the heart icon on any game card to bookmark it!'
-                          : 'Try changing your search keywords, clearing categories, or upload a game in this genre.'}
-                      </p>
-                    </div>
-
-                    <div className="pt-2 flex items-center justify-center gap-3">
-                      <button
-                        onClick={() => {
-                          setSearchQuery('');
-                          setActiveGenre('All');
-                          setCurrentView('arcade');
-                        }}
-                        className="px-4 py-2 text-xs font-semibold bg-white/[0.06] hover:bg-white/[0.12] text-white rounded-xl border border-white/10 transition-colors cursor-pointer"
-                      >
-                        Browse All Games
-                      </button>
-
-                      <button
-                        onClick={handleOpenUpload}
-                        className="px-4 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white rounded-xl shadow-md cursor-pointer flex items-center gap-1.5"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Upload a Game</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Games Grid (CrazyGames 4-column responsive layout) */}
-                {!isLoading && filteredGames.length > 0 && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {filteredGames.map((game) => (
+                {/* The 65 Equal-Sized Slots Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+                  {mainScreenSlots.map((slot) => {
+                    return slot.game ? (
                       <GameCard
-                        key={game.id}
-                        game={game}
+                        key={`slot-game-${slot.game.id}-${slot.slotNumber}`}
+                        game={slot.game}
+                        slotNumber={slot.slotNumber}
                         onPlay={handleSelectGame}
                         onUpdate={handleUpdateGame}
-                        isFavorited={favoriteIds.includes(game.id)}
+                        onDelete={handleDeleteGame}
+                        isAdmin={isAdmin}
+                        isFavorited={favoriteIds.includes(slot.game.id)}
                         onToggleFavorite={toggleFavorite}
                       />
-                    ))}
-                  </div>
-                )}
+                    ) : (
+                      <EmptySlotCard
+                        key={`empty-slot-${slot.slotNumber}`}
+                        slotNumber={slot.slotNumber}
+                        onOpenUpload={handleOpenUpload}
+                      />
+                    );
+                  })}
+                </div>
               </section>
+
+              {/* Secret Admin Access Terminal at the bottom of the main menu */}
+              <AdminSecretTerminal
+                isAdmin={isAdmin}
+                onUnlockAdmin={handleUnlockAdmin}
+                onLockAdmin={handleLockAdmin}
+                totalGamesCount={games.length}
+              />
             </div>
           )}
         </main>
 
-        {/* CrazyGames Footer */}
+        {/* Side Mode: My Created Games (View & Edit Info) */}
+        <CreatedGamesSidebar
+          isOpen={isCreatedGamesOpen}
+          onClose={() => setIsCreatedGamesOpen(false)}
+          myGames={myCreatedGames}
+          onPlayGame={(game) => {
+            setIsCreatedGamesOpen(false);
+            handleSelectGame(game);
+          }}
+          onOpenUpload={() => {
+            setIsCreatedGamesOpen(false);
+            handleOpenUpload();
+          }}
+          onGameUpdated={handleGameUpdatedFromSide}
+          onGameDeleted={handleDeleteGame}
+        />
+
+        {/* User Login & Signup Modal */}
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          initialMode={authMode}
+          onClose={() => setIsAuthModalOpen(false)}
+          onSuccess={handleAuthSuccess}
+        />
+
+        {/* User Profile & Saved Progress Modal */}
+        <UserProfileModal
+          isOpen={isProfileModalOpen}
+          onClose={() => setIsProfileModalOpen(false)}
+          currentUser={currentUser}
+          allGames={games}
+          onSelectGame={(game) => {
+            handleSelectGame(game);
+          }}
+          onLogout={handleLogout}
+        />
+
+        {/* Footer */}
         <footer className="mt-16 border-t border-white/[0.08] bg-[#090d16] py-8 text-xs text-slate-400">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-xs shadow-md">
-                SS
-              </div>
-              <div>
-                <span className="font-bold text-white text-sm">Sphere Strike Games</span>
-                <p className="text-[11px] text-slate-400">Next-generation community web arcade</p>
-              </div>
+              <SphereStrikeLogo variant="horizontal" size="sm" />
             </div>
 
-            <div className="flex items-center gap-6 text-slate-400 text-[11px]">
-              <span>Instant HTML5 Sandbox</span>
+            <div className="flex items-center gap-4 sm:gap-6 text-slate-400 text-[11px]">
+              <span>65 Equal Game Slots</span>
               <span>·</span>
-              <span>Version Rollbacks</span>
+              <span>No Spotlight Games</span>
               <span>·</span>
-              <span>No Neon Colors</span>
+              <span>Side Edit Mode</span>
               <span>·</span>
-              <span>100% Free to Play</span>
+              <span>HTML5 Sandbox</span>
             </div>
           </div>
         </footer>

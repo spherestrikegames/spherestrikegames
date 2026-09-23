@@ -1,6 +1,6 @@
 import React from 'react';
 import { 
-  Gamepad2, Target, Rocket, Boxes, Compass, Smile, Trophy, Tv, Users, 
+  Gamepad2, Target, Rocket, Boxes, Compass, Smile, Trophy, Tv, Users, GraduationCap,
   SlidersHorizontal, ChevronDown, Flame, Sparkles
 } from 'lucide-react';
 import { GameGenre } from '../types/game';
@@ -18,6 +18,7 @@ const CATEGORIES: { id: GameGenre; label: string; icon: React.ReactNode }[] = [
   { id: '2 Player', label: '2 Player', icon: <Users className="w-3.5 h-3.5" /> },
   { id: 'Action', label: 'Action', icon: <Target className="w-3.5 h-3.5" /> },
   { id: 'Arcade', label: 'Arcade', icon: <Gamepad2 className="w-3.5 h-3.5" /> },
+  { id: 'Educational', label: 'Educational', icon: <GraduationCap className="w-3.5 h-3.5" /> },
   { id: 'Shooter', label: 'Shooter', icon: <Rocket className="w-3.5 h-3.5" /> },
   { id: 'Puzzle', label: 'Puzzle', icon: <Boxes className="w-3.5 h-3.5" /> },
   { id: 'Driving', label: 'Driving', icon: <Compass className="w-3.5 h-3.5" /> },
@@ -37,7 +38,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
     <div className="w-full space-y-3">
       {/* Category Pills Row + Sort Dropdown */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        {/* Scrollable Category Pills (CrazyGames style) */}
+        {/* Scrollable Category Pills */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 scrollbar-thin scrollbar-thumb-white/10 no-scrollbar">
           {CATEGORIES.map((cat) => {
             const isActive = activeGenre === cat.id;

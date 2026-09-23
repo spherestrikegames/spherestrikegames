@@ -1,10 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   ArrowLeft, Maximize2, Minimize2, RotateCcw, ThumbsUp, Star, 
-  Share2, Code, History, MessageSquare, Check, Sparkles, AlertCircle, Eye, ShieldCheck, Play, Heart, ChevronDown, Trash2, ExternalLink, Globe
+  Share2, Code, History, MessageSquare, Check, Sparkles, AlertCircle, Eye, ShieldCheck, Play, Heart, ChevronDown, Trash2, ExternalLink, Globe, Cloud, Trophy, Save, Bookmark, CheckCircle2, LogIn, Lock
 } from 'lucide-react';
 import { Game, GameVersion, GameComment } from '../types/game';
+import { User } from '../types/user';
+import { GameProgress } from '../types/progress';
 import { trackGamePlay, likeGame, addComment } from '../utils/api';
+import { 
+  getUserGameProgress, saveUserGameProgress, recordHighScore, 
+  recordGameSessionPlay, setGuestSessionProgress 
+} from '../utils/progress';
 
 interface GamePlayerProps {
   game: Game;
@@ -13,6 +19,9 @@ interface GamePlayerProps {
   onSelectRelatedGame: (game: Game) => void;
   allGames: Game[];
   onDeleteGame?: (gameId: string) => void;
+  isAdmin?: boolean;
+  currentUser?: User | null;
+  onOpenLogin?: () => void;
 }
 
 export const GamePlayer: React.FC<GamePlayerProps> = ({
@@ -21,7 +30,10 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   onUpdateGame,
   onSelectRelatedGame,
   allGames,
-  onDeleteGame
+  onDeleteGame,
+  isAdmin = false,
+  currentUser = null,
+  onOpenLogin,
 }) => {
   const [selectedVersion, setSelectedVersion] = useState<string>(game.currentVersion);
   const [activeCode, setActiveCode] = useState<string>(game.code);
@@ -37,13 +49,105 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
   // Comments state
   const [comments, setComments] = useState<GameComment[]>(game.comments || []);
-  const [newCommentAuthor, setNewCommentAuthor] = useState<string>('');
+  const [newCommentAuthor, setNewCommentAuthor] = useState<string>(currentUser?.username || '');
   const [newCommentText, setNewCommentText] = useState<string>('');
   const [newCommentRating, setNewCommentRating] = useState<number>(5);
   const [isSubmittingComment, setIsSubmittingComment] = useState<boolean>(false);
 
+  // User Game Progress & Cloud Save State
+  const [progress, setProgress] = useState<GameProgress | null>(() => {
+    if (currentUser) {
+      return getUserGameProgress(currentUser.id, game.id);
+    }
+    return null;
+  });
+  const [sessionSeconds, setSessionSeconds] = useState<number>(0);
+  const [isScoreModalOpen, setIsScoreModalOpen] = useState<boolean>(false);
+  const [inputScore, setInputScore] = useState<string>('');
+  const [inputLevel, setInputLevel] = useState<string>('1');
+  const [inputCheckpoint, setInputCheckpoint] = useState<string>('');
+  const [saveToast, setSaveToast] = useState<string>('');
+
   const iframeContainerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  // Reload progress if currentUser changes
+  useEffect(() => {
+    if (currentUser) {
+      setProgress(getUserGameProgress(currentUser.id, game.id));
+      if (!newCommentAuthor) setNewCommentAuthor(currentUser.username);
+    } else {
+      setProgress(null);
+    }
+  }, [currentUser, game.id]);
+
+  // Track session playtime and auto-save for logged in users
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setSessionSeconds(s => {
+        const next = s + 5;
+        if (currentUser && next % 15 === 0) {
+          recordGameSessionPlay(currentUser.id, game.id, game.title, 15);
+          setProgress(getUserGameProgress(currentUser.id, game.id));
+        }
+        return next;
+      });
+    }, 5000);
+
+    return () => clearInterval(timer);
+  }, [currentUser, game.id, game.title]);
+
+  // Listen to postMessage from game (high scores or checkpoints)
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data && typeof event.data === 'object') {
+        const scoreVal = Number(event.data.score ?? event.data.finalScore ?? event.data.points);
+        if (!isNaN(scoreVal) && scoreVal > 0) {
+          if (currentUser) {
+            const res = recordHighScore(currentUser.id, game.id, game.title, scoreVal);
+            setProgress(res.progress);
+            setSaveToast(res.isNewBest ? `🏆 New Personal Record: ${scoreVal.toLocaleString()} pts!` : `Score saved: ${scoreVal.toLocaleString()} pts`);
+            setTimeout(() => setSaveToast(''), 3500);
+          } else {
+            setGuestSessionProgress(game.id, { highScore: scoreVal, gameTitle: game.title });
+          }
+        }
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [currentUser, game.id, game.title]);
+
+  const handleManualSaveProgress = (e: React.FormEvent) => {
+    e.preventDefault();
+    const scoreVal = Number(inputScore) || 0;
+    const levelVal = Number(inputLevel) || 1;
+
+    if (!currentUser) {
+      setGuestSessionProgress(game.id, {
+        highScore: scoreVal,
+        levelReached: levelVal,
+        checkpoints: inputCheckpoint.trim() || undefined,
+        gameTitle: game.title
+      });
+      setIsScoreModalOpen(false);
+      onOpenLogin?.();
+      return;
+    }
+
+    const updated = saveUserGameProgress(currentUser.id, game.id, game.title, {
+      highScore: Math.max(progress?.highScore || 0, scoreVal),
+      levelReached: levelVal,
+      checkpoints: inputCheckpoint.trim() || progress?.checkpoints || undefined
+    });
+
+    setProgress(updated);
+    setIsScoreModalOpen(false);
+    setInputScore('');
+    setInputCheckpoint('');
+    setSaveToast('Progress saved to your cloud account!');
+    setTimeout(() => setSaveToast(''), 3500);
+  };
 
   // Sync game code when version is changed
   useEffect(() => {
@@ -132,7 +236,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     }
   };
 
-  // Up Next / Related games (CrazyGames side rail)
+  // Up Next / Related games side rail
   const relatedGames = allGames.filter(g => g.id !== game.id).slice(0, 6);
 
   return (
@@ -156,7 +260,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         </div>
       </div>
 
-      {/* Main CrazyGames Layout: Left/Center Game & Tabs, Right Up Next Rail */}
+      {/* Main Player Layout: Left/Center Game & Tabs, Right Up Next Rail */}
       <div className={`grid grid-cols-1 ${isTheater ? 'lg:grid-cols-1' : 'lg:grid-cols-12'} gap-6`}>
         {/* Left / Main Column (8 or 12 cols in theater mode) */}
         <div className={isTheater ? 'w-full space-y-6' : 'lg:col-span-9 space-y-6'}>
@@ -272,6 +376,182 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
             )}
           </div>
 
+          {/* Toast Notification when progress or score is saved */}
+          {saveToast && (
+            <div className="p-3 rounded-2xl bg-emerald-950/90 border border-emerald-500/50 text-emerald-300 text-xs font-semibold flex items-center justify-between gap-2 shadow-lg shadow-emerald-950/60 animate-in fade-in">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span>{saveToast}</span>
+              </div>
+              <button 
+                onClick={() => setSaveToast('')} 
+                className="text-emerald-400 hover:text-emerald-200 cursor-pointer font-bold px-1.5"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* Cloud Save & Account Progress Status Bar */}
+          {currentUser ? (
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-[#0c1424] border border-emerald-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
+                  <Cloud className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-white font-['Outfit']">Cloud Progress Saved</span>
+                    <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20">
+                      @{currentUser.username}
+                    </span>
+                    <span className="flex items-center gap-1 text-[10px] text-emerald-400/90 font-mono">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Auto-syncing
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-300 font-mono mt-0.5">
+                    <span className="text-amber-300 font-semibold flex items-center gap-1">
+                      <Trophy className="w-3 h-3 text-amber-400" />
+                      Personal Best: {(progress?.highScore || 0).toLocaleString()} pts
+                    </span>
+                    <span>•</span>
+                    <span>Level {progress?.levelReached || 1}</span>
+                    <span>•</span>
+                    <span>⏱️ Session: {Math.floor(sessionSeconds / 60)}m {sessionSeconds % 60}s</span>
+                    {progress?.checkpoints && (
+                      <>
+                        <span>•</span>
+                        <span className="text-blue-300 flex items-center gap-1">
+                          <Bookmark className="w-3 h-3" />
+                          {progress.checkpoints}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setInputScore(progress?.highScore ? String(progress.highScore) : '');
+                  setInputLevel(progress?.levelReached ? String(progress.levelReached) : '1');
+                  setInputCheckpoint(progress?.checkpoints || '');
+                  setIsScoreModalOpen(true);
+                }}
+                className="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 hover:text-white font-bold text-xs transition-all flex items-center justify-center gap-1.5 shrink-0 cursor-pointer shadow-sm"
+              >
+                <Save className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Save Record / Checkpoint</span>
+              </button>
+            </div>
+          ) : (
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-amber-950/40 via-blue-950/30 to-purple-950/40 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-md">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0 mt-0.5 sm:mt-0">
+                  <Cloud className="w-5 h-5" />
+                </div>
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-amber-300 font-['Outfit']">Guest Mode: Progress Won't Save!</span>
+                    <span className="text-[10px] font-mono text-amber-400 bg-amber-500/10 px-1.5 py-0.2 rounded border border-amber-500/20">
+                      Unsaved
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    <strong>Account Benefit:</strong> When you have an account, your high scores, checkpoints, playtime, and unlocked trophies are permanently saved in the cloud.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                <button
+                  type="button"
+                  onClick={() => onOpenLogin?.()}
+                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-950 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  <span>Log In to Save Progress</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Record Score / Save Checkpoint Modal */}
+          {isScoreModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+              <div className="relative w-full max-w-sm bg-[#090e1a] border border-white/[0.12] rounded-3xl p-6 shadow-2xl space-y-4">
+                <button
+                  type="button"
+                  onClick={() => setIsScoreModalOpen(false)}
+                  className="absolute top-4 right-4 p-1.5 rounded-xl bg-white/[0.04] text-slate-400 hover:text-white cursor-pointer"
+                >
+                  ✕
+                </button>
+
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                    <Save className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-white text-base font-['Outfit']">Save Game Progress</h3>
+                    <p className="text-xs text-slate-400 truncate max-w-[200px]">{game.title}</p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleManualSaveProgress} className="space-y-3">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block mb-1">
+                      High Score / Points
+                    </label>
+                    <input
+                      type="number"
+                      value={inputScore}
+                      onChange={(e) => setInputScore(e.target.value)}
+                      placeholder="e.g. 1500"
+                      className="w-full px-3.5 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block mb-1">
+                      Stage / Level Reached
+                    </label>
+                    <input
+                      type="number"
+                      value={inputLevel}
+                      onChange={(e) => setInputLevel(e.target.value)}
+                      placeholder="1"
+                      className="w-full px-3.5 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider block mb-1">
+                      Checkpoint Note (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={inputCheckpoint}
+                      onChange={(e) => setInputCheckpoint(e.target.value)}
+                      placeholder="e.g. Boss defeated, world 2 unlocked"
+                      className="w-full px-3.5 py-2 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white text-xs focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-950 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>{currentUser ? 'Save to Cloud Profile' : 'Save & Log In'}</span>
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
+
           {/* Game Title, Creator & Primary Action Bar */}
           <div className="p-5 rounded-2xl glass-panel border border-white/[0.08] space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -331,25 +611,36 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 {/* Update / Fork Game */}
                 <button
                   onClick={() => onUpdateGame(game)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-md shadow-blue-950 transition-all cursor-pointer"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold shadow-md transition-all cursor-pointer ${
+                    isAdmin 
+                      ? 'bg-amber-600 hover:bg-amber-500 text-white shadow-amber-950/50' 
+                      : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-950'
+                  }`}
                 >
                   <Code className="w-3.5 h-3.5" />
-                  <span>Update / Edit</span>
+                  <span>{isAdmin ? '🛡️ Moderate / Edit' : 'Update / Edit'}</span>
                 </button>
 
                 {/* Delete Game */}
                 {onDeleteGame && (
                   <button
                     onClick={() => {
-                      if (window.confirm(`Are you sure you want to remove "${game.title}"?`)) {
+                      const msg = isAdmin
+                        ? `[ADMIN ACTION] Are you sure you want to delete "${game.title}" as inappropriate? This will permanently remove it.`
+                        : `Are you sure you want to remove "${game.title}"?`;
+                      if (window.confirm(msg)) {
                         onDeleteGame(game.id);
                       }
                     }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.04] hover:bg-rose-950/40 border border-white/[0.08] hover:border-rose-500/40 text-slate-400 hover:text-rose-300 text-xs font-medium transition-all cursor-pointer"
-                    title="Delete game"
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+                      isAdmin
+                        ? 'bg-rose-950/80 hover:bg-rose-900 border border-rose-500/50 text-rose-200 font-bold shadow-md shadow-rose-950'
+                        : 'bg-white/[0.04] hover:bg-rose-950/40 border border-white/[0.08] hover:border-rose-500/40 text-slate-400 hover:text-rose-300'
+                    }`}
+                    title={isAdmin ? 'Delete inappropriate game as Admin' : 'Delete game'}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                    <span>Delete</span>
+                    <span>{isAdmin ? '🛡️ Delete Inappropriate' : 'Delete'}</span>
                   </button>
                 )}
               </div>
@@ -369,7 +660,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
             )}
           </div>
 
-          {/* CrazyGames Tabs (Info, Version History, Comments) */}
+          {/* Player Tabs (Info, Version History, Comments) */}
           <div className="space-y-4">
             {/* Tab navigation headers */}
             <div className="flex items-center gap-2 border-b border-white/[0.08] pb-1">
@@ -641,7 +932,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           </div>
         </div>
 
-        {/* Right Rail: CrazyGames "Up Next / More Like This" Column */}
+        {/* Right Rail: "Up Next / More Like This" Column */}
         {!isTheater && (
           <div className="lg:col-span-3 space-y-4">
             <div className="p-4 rounded-2xl glass-panel border border-white/[0.08] space-y-3">
