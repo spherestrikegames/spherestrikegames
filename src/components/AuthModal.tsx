@@ -75,11 +75,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           console.warn('Guest migration skipped:', e);
         }
         setIsLoading(false);
-        onSuccess(user);
         onClose();
+        try {
+          onSuccess(user);
+        } catch (e) {
+          console.warn('onSuccess callback error:', e);
+        }
       } catch (err: any) {
         setIsLoading(false);
-        let msg = err?.message || 'Registration failed.';
+        let msg = err?.message || 'Registration could not be completed.';
         if (msg.includes('The string did not match the expected pattern')) {
           msg = 'Registration error. Please check your gamer tag format and try again.';
         }
@@ -111,8 +115,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           console.warn('Guest migration skipped:', e);
         }
         setIsLoading(false);
-        onSuccess(user);
         onClose();
+        try {
+          onSuccess(user);
+        } catch (e) {
+          console.warn('onSuccess callback error:', e);
+        }
       } catch (err: any) {
         setIsLoading(false);
         let msg = err?.message || 'Authentication failed. Please check your credentials.';

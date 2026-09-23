@@ -97,24 +97,41 @@ export default function App() {
   };
 
   const handleAuthSuccess = (user: User) => {
-    setCurrentUser(user);
-    hydrateUserProgressFromServer(user);
+    try {
+      setCurrentUser(user);
+    } catch (e) {
+      console.warn('setCurrentUser state error:', e);
+    }
+
+    try {
+      hydrateUserProgressFromServer(user);
+    } catch (e) {
+      console.warn('Hydration skipped:', e);
+    }
 
     // Restore favorites from user account
-    if (Array.isArray(user.favoriteGameIds) && user.favoriteGameIds.length > 0) {
-      setFavoriteIds(user.favoriteGameIds);
-      localStorage.setItem('spherestrike_favs', JSON.stringify(user.favoriteGameIds));
+    try {
+      if (Array.isArray(user.favoriteGameIds) && user.favoriteGameIds.length > 0) {
+        setFavoriteIds(user.favoriteGameIds);
+        localStorage.setItem('spherestrike_favs', JSON.stringify(user.favoriteGameIds));
+      }
+    } catch (e) {
+      console.warn('Favorite storage error:', e);
     }
 
     // Restore exact account state where user left off
-    if (user.lastPlayedGameId) {
-      const match = games.find(g => g.id === user.lastPlayedGameId || g.slug === user.lastPlayedGameId);
-      if (match) {
-        setSelectedGame(match);
-        if (user.lastActiveView === 'player' || !user.lastActiveView) {
-          setCurrentView('player');
+    try {
+      if (user.lastPlayedGameId) {
+        const match = games.find(g => g.id === user.lastPlayedGameId || g.slug === user.lastPlayedGameId);
+        if (match) {
+          setSelectedGame(match);
+          if (user.lastActiveView === 'player' || !user.lastActiveView) {
+            setCurrentView('player');
+          }
         }
       }
+    } catch (e) {
+      console.warn('Last played sync error:', e);
     }
   };
 
