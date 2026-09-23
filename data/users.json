@@ -5,7 +5,7 @@
     "email": "goyal.rishi730@gmail.com",
     "password": "macbookair",
     "joinedAt": "2026-09-23T14:55:36.636Z",
-    "lastLoginAt": "2026-09-23T15:26:07.228Z",
+    "lastLoginAt": "2026-09-23T22:54:26.286Z",
     "gamesPlayed": 0,
     "gamesCreatedCount": 0,
     "highScores": {},
@@ -19,6 +19,6 @@
     "role": "admin",
     "aiRiskCategory": "Clean Verified Administrator",
     "aiExplanation": "System Administrator account. No anomalies or malicious activity detected.",
-    "lastAiAuditAt": "2026-09-23T15:26:04.833Z"
+    "lastAiAuditAt": "2026-09-23T22:57:45.627Z"
   }
 ]

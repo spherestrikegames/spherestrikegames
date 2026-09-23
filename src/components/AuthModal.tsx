@@ -42,14 +42,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     if (mode === 'signup') {
       const cleanUser = username.trim();
-      if (!cleanUser) {
-        setErrorMsg('Please enter a username or gamer tag.');
+      if (!cleanUser || cleanUser.length < 2) {
+        setErrorMsg('Please enter a gamer tag or username (at least 2 characters).');
+        return;
+      }
+      if (!password || password.trim().length < 3) {
+        setErrorMsg('Please choose a password (at least 3 characters).');
         return;
       }
       const safeEmail = email.trim() && email.includes('@')
         ? email.trim()
-        : `${cleanUser.toLowerCase().replace(/[^a-z0-9_-]/g, '')}@player.local`;
-      const safePassword = password.trim() || 'SpherePlayer2026';
+        : `${cleanUser.toLowerCase().replace(/[^a-z0-9_-]/g, '')}_${Date.now().toString(36)}@player.local`;
+      const safePassword = password.trim();
 
       setIsLoading(true);
       try {
@@ -58,7 +62,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           safeEmail, 
           safePassword, 
           adminPasskey.trim() || undefined,
-          isAdminRegister || cleanUser.toLowerCase().includes('admin')
+          isAdminRegister
         );
         hydrateUserProgressFromServer(user);
         migrateGuestProgressToUser(user.id);
@@ -71,9 +75,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
     } else {
       // Login
-      const identifier = email || username;
-      if (!identifier.trim()) {
-        setErrorMsg('Please enter your email or username.');
+      const identifier = (username || email).trim();
+      if (!identifier) {
+        setErrorMsg('Please enter your gamer tag or email.');
         return;
       }
       if (!password) {
@@ -189,86 +193,141 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
         {/* Error message */}
         {errorMsg && (
-          <div className="p-3 mb-4 rounded-xl bg-rose-950/50 border border-rose-500/30 text-rose-300 text-xs font-medium animate-in fade-in flex items-center gap-2">
-            <span>{errorMsg}</span>
+          <div className="p-3 mb-4 rounded-xl bg-rose-950/50 border border-rose-500/30 text-rose-300 text-xs font-medium animate-in fade-in space-y-1.5">
+            <p>{errorMsg}</p>
+            {errorMsg.toLowerCase().includes('already taken') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('login');
+                  setErrorMsg('');
+                }}
+                className="text-[11px] text-amber-300 hover:text-amber-200 underline font-semibold flex items-center gap-1 cursor-pointer"
+              >
+                <span>Log in to @{username} instead?</span>
+              </button>
+            )}
           </div>
         )}
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {mode === 'signup' && (
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
-                Gamer Tag / Username
-              </label>
-              <div className="relative">
-                <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="e.g. PixelStriker"
-                  required
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white text-xs sm:text-sm focus:outline-none focus:border-blue-500 transition-colors"
-                />
+        <form onSubmit={handleSubmit} className="space-y-3.5">
+          {mode === 'signup' ? (
+            <>
+              {/* Gamer Tag / Username */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between">
+                  <span>Gamer Tag / Username</span>
+                  <span className="text-[10px] text-blue-400 font-normal">Required</span>
+                </label>
+                <div className="relative">
+                  <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="e.g. PixelKnight, StarStriker, Alex"
+                    required
+                    autoFocus
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white text-xs sm:text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                  />
+                </div>
               </div>
-            </div>
+
+              {/* Password */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between">
+                  <span>Password</span>
+                  <span className="text-[10px] text-blue-400 font-normal">Required</span>
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Choose a password (min 3 chars)"
+                    required
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white text-xs sm:text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* Email (Optional) */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between">
+                  <span>Email</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Optional</span>
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@domain.com (optional)"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white text-xs sm:text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Login Identifier */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+                  Gamer Tag or Email
+                </label>
+                <div className="relative">
+                  <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={username || email}
+                    onChange={(e) => {
+                      setUsername(e.target.value);
+                      setEmail(e.target.value);
+                    }}
+                    placeholder="Enter your gamer tag or email"
+                    required
+                    autoFocus
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white text-xs sm:text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              {/* Login Password */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+                  Password
+                </label>
+                <div className="relative">
+                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Your password"
+                    required
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white text-xs sm:text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                  />
+                </div>
+              </div>
+            </>
           )}
-
-          <div className="space-y-1.5">
-            <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
-              {mode === 'signup' ? 'Email Address' : 'Email or Username'}
-            </label>
-            <div className="relative">
-              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                type={mode === 'signup' ? 'email' : 'text'}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder={mode === 'signup' ? 'you@domain.com' : 'you@domain.com or gamer tag'}
-                required
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white text-xs sm:text-sm focus:outline-none focus:border-blue-500 transition-colors"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
-                Password
-              </label>
-              {mode === 'login' && (
-                <span className="text-[11px] text-blue-400 hover:text-blue-300 cursor-pointer">
-                  Forgot?
-                </span>
-              )}
-            </div>
-            <div className="relative">
-              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                required
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white text-xs sm:text-sm focus:outline-none focus:border-blue-500 transition-colors"
-              />
-            </div>
-          </div>
 
           {/* Optional Admin Account Creation */}
           {mode === 'signup' && (
-            <div className="pt-1 border-t border-white/[0.06] space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-slate-300 hover:text-white">
+            <div className="pt-2 border-t border-white/[0.06] space-y-2">
+              <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-slate-400 hover:text-white">
                 <input
                   type="checkbox"
                   checked={isAdminRegister}
                   onChange={(e) => setIsAdminRegister(e.target.checked)}
                   className="rounded border-white/[0.2] bg-white/[0.05] text-amber-500 focus:ring-0 cursor-pointer"
                 />
-                <span className="flex items-center gap-1.5 font-semibold">
+                <span className="flex items-center gap-1.5 font-semibold text-[11px]">
                   <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Create as Administrator Account</span>
+                  <span>Register as Administrator (passkey required)</span>
                 </span>
               </label>
 
@@ -303,19 +362,52 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             ) : mode === 'login' ? (
               <>
                 <LogIn className="w-4 h-4" />
-                <span>Log In</span>
+                <span>Log In to Arcade</span>
               </>
             ) : (
               <>
                 <UserPlus className="w-4 h-4" />
-                <span>Create Account</span>
+                <span>Create Player Account</span>
               </>
             )}
           </button>
+
+          {/* Quick Switch Mode */}
+          <div className="text-center pt-2">
+            {mode === 'signup' ? (
+              <p className="text-xs text-slate-400">
+                Already have an account?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('login');
+                    setErrorMsg('');
+                  }}
+                  className="text-blue-400 hover:text-blue-300 font-bold cursor-pointer"
+                >
+                  Log In
+                </button>
+              </p>
+            ) : (
+              <p className="text-xs text-slate-400">
+                New player?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode('signup');
+                    setErrorMsg('');
+                  }}
+                  className="text-blue-400 hover:text-blue-300 font-bold cursor-pointer"
+                >
+                  Create an account
+                </button>
+              </p>
+            )}
+          </div>
         </form>
 
         {/* Security & Multi-Account note */}
-        <div className="mt-5 pt-4 border-t border-white/[0.08] text-center">
+        <div className="mt-4 pt-3 border-t border-white/[0.08] text-center">
           <p className="text-[11px] text-slate-400">
             Account progress, high scores, and games are saved permanently to the cloud server database.
           </p>

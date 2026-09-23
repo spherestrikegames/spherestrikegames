@@ -541,12 +541,17 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
     const { username, email, password, adminPasskey, makeAdmin } = req.body;
     const cleanUsername = String(username || '').trim();
     if (!cleanUsername) {
-      return res.status(400).json({ success: false, message: 'Please enter a username or gamer tag.' });
+      return res.status(400).json({ success: false, message: 'Please enter a gamer tag or username.' });
     }
 
-    const cleanEmail = email && String(email).trim().includes('@')
+    if (cleanUsername.length < 2) {
+      return res.status(400).json({ success: false, message: 'Username must be at least 2 characters.' });
+    }
+
+    const hasProvidedEmail = Boolean(email && String(email).trim().includes('@'));
+    const cleanEmail = hasProvidedEmail
       ? String(email).trim().toLowerCase()
-      : `${cleanUsername.toLowerCase().replace(/[^a-z0-9_-]/g, '')}@player.local`;
+      : `${cleanUsername.toLowerCase().replace(/[^a-z0-9_-]/g, '')}_${Date.now().toString(36)}@player.local`;
 
     const userPassword = String(password || 'SpherePlayer2026').trim();
 
@@ -554,32 +559,37 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
     const isAdminRequested = Boolean(
       passkeyNormalized === 'macbookair' ||
       passkeyNormalized === 'macbook' ||
-      makeAdmin ||
-      cleanUsername.toLowerCase().includes('admin') ||
-      users.length === 0
+      makeAdmin
     );
 
     const now = new Date().toISOString();
 
-    // Check if account already exists: seamlessly log in / update without error
+    // Check if account already exists with this username or explicit email
     const existing = users.find(
-      u => u.username.toLowerCase() === cleanUsername.toLowerCase() || u.email.toLowerCase() === cleanEmail
+      u => u.username.toLowerCase() === cleanUsername.toLowerCase() || 
+           (hasProvidedEmail && u.email.toLowerCase() === cleanEmail)
     );
 
     if (existing) {
-      existing.lastLoginAt = now;
-      if (userPassword) {
-        existing.password = userPassword;
+      // If the provided password matches, welcome them back seamlessly
+      if (!existing.password || existing.password === userPassword) {
+        existing.lastLoginAt = now;
+        if (isAdminRequested) {
+          existing.isAdmin = true;
+          existing.role = 'admin';
+          existing.aiRiskCategory = 'Clean Verified Administrator';
+          existing.aiExplanation = 'System Administrator account. No anomalies or malicious activity detected.';
+        }
+        saveUsers();
+        const { password: _, ...sanitizedUser } = existing as any;
+        return res.status(200).json({ success: true, user: sanitizedUser, message: 'Welcome back!' });
+      } else {
+        // Name is taken by someone else with a different password
+        return res.status(400).json({ 
+          success: false, 
+          message: `The username "${cleanUsername}" is already taken by another player. Please choose a different gamer tag or log in.` 
+        });
       }
-      if (isAdminRequested) {
-        existing.isAdmin = true;
-        existing.role = 'admin';
-        existing.aiRiskCategory = 'Clean Verified Administrator';
-        existing.aiExplanation = 'System Administrator account. No anomalies or malicious activity detected.';
-      }
-      saveUsers();
-      const { password: _, ...sanitizedUser } = existing as any;
-      return res.status(200).json({ success: true, user: sanitizedUser, message: 'Welcome back!' });
     }
 
     const newId = 'user-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6);
@@ -603,14 +613,14 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
       isAdmin: isAdminRequested,
       role: isAdminRequested ? 'admin' : 'user',
       aiRiskCategory: isAdminRequested ? 'Clean Verified Administrator' : 'New User',
-      aiExplanation: isAdminRequested ? 'System Administrator account. No anomalies or malicious activity detected.' : 'Newly created user account.'
+      aiExplanation: isAdminRequested ? 'System Administrator account. No anomalies or malicious activity detected.' : 'Newly created player account.'
     };
 
     users.push(newUser);
     saveUsers();
 
     const { password: _, ...sanitizedUser } = newUser as any;
-    res.status(201).json({ success: true, user: sanitizedUser });
+    res.status(201).json({ success: true, user: sanitizedUser, message: 'Account created successfully!' });
   } catch (err: any) {
     console.error('Error during registration:', err);
     res.status(500).json({ success: false, message: 'Server error during registration.' });

@@ -203,6 +203,30 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <button
                     onClick={() => {
                       setUserDropdownOpen(false);
+                      onOpenSignup();
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-blue-300 hover:text-blue-200 hover:bg-blue-600/20 rounded-xl transition-colors cursor-pointer"
+                  >
+                    <UserPlus className="w-4 h-4 text-blue-400" />
+                    <span>+ Create Another Account</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setUserDropdownOpen(false);
+                      onOpenLogin();
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-slate-300 hover:text-white hover:bg-white/[0.06] rounded-xl transition-colors cursor-pointer"
+                  >
+                    <LogIn className="w-4 h-4 text-slate-400" />
+                    <span>Switch Account</span>
+                  </button>
+
+                  <div className="my-1 border-t border-white/[0.08]" />
+
+                  <button
+                    onClick={() => {
+                      setUserDropdownOpen(false);
                       onLogout();
                     }}
                     className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 rounded-xl transition-colors cursor-pointer"

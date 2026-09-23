@@ -350,6 +350,16 @@ export default function App() {
         favoritesCount={favoriteIds.length}
         myCreatedGamesCount={myCreatedGames.length}
         isAdmin={isAdmin}
+        currentUser={currentUser}
+        onOpenLogin={() => {
+          setAuthMode('login');
+          setIsAuthModalOpen(true);
+        }}
+        onOpenSignup={() => {
+          setAuthMode('signup');
+          setIsAuthModalOpen(true);
+        }}
+        onLogout={handleLogout}
         onOpenAdminTerminal={() => {
           if (currentView !== 'arcade') setCurrentView('arcade');
           setTimeout(() => {
@@ -475,6 +485,41 @@ export default function App() {
                 onSortChange={setSortBy}
                 totalGamesCount={filteredGames.length}
               />
+
+              {/* Guest Account Invitation Banner */}
+              {!currentUser && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-blue-950/50 via-indigo-950/40 to-slate-900/60 border border-blue-500/25 shadow-lg shadow-blue-950/30">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-blue-600/30 border border-blue-400/40 flex items-center justify-center text-blue-400 shrink-0">
+                      <Sparkles className="w-5 h-5 text-blue-400" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-white text-xs sm:text-sm">Join Sphere Strike Arcade</p>
+                      <p className="text-[11px] text-slate-300">Create your free player account to save game checkpoints, high scores & publish games.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                    <button
+                      onClick={() => {
+                        setAuthMode('login');
+                        setIsAuthModalOpen(true);
+                      }}
+                      className="px-3.5 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 text-xs font-semibold transition-all cursor-pointer"
+                    >
+                      Log In
+                    </button>
+                    <button
+                      onClick={() => {
+                        setAuthMode('signup');
+                        setIsAuthModalOpen(true);
+                      }}
+                      className="px-4 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md shadow-blue-950 transition-all cursor-pointer"
+                    >
+                      Create Free Account
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* 65 EQUAL SIZE SLOTS GRID (NO SPOTLIGHT GAMES - ALL SAME SIZE) */}
               <section className="space-y-4">
