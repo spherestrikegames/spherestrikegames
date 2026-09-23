@@ -1,1 +1,24 @@
-[]
+[
+  {
+    "id": "user-mueqr6an-qf1h",
+    "username": "Rishi_admin",
+    "email": "rishi_admin_mueqr6am@player.local",
+    "password": "MacBookair",
+    "joinedAt": "2026-09-23T23:35:44.542Z",
+    "lastLoginAt": "2026-09-23T23:36:41.471Z",
+    "gamesPlayed": 0,
+    "gamesCreatedCount": 0,
+    "highScores": {},
+    "savedProgress": {},
+    "favoriteGameIds": [],
+    "createdGameIds": [],
+    "isBlocked": false,
+    "isFlagged": false,
+    "suspiciousScore": 5,
+    "isAdmin": true,
+    "role": "admin",
+    "aiRiskCategory": "Clean Verified Administrator",
+    "aiExplanation": "System Administrator account. No anomalies or malicious activity detected.",
+    "lastAiAuditAt": "2026-09-23T23:36:52.835Z"
+  }
+]

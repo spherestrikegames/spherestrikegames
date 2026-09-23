@@ -219,7 +219,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {errorMsg && (
           <div className="p-3 mb-4 rounded-xl bg-rose-950/50 border border-rose-500/30 text-rose-300 text-xs font-medium animate-in fade-in space-y-1.5">
             <p>{errorMsg}</p>
-            {errorMsg.toLowerCase().includes('already taken') && (
+            {(errorMsg.toLowerCase().includes('already') || errorMsg.toLowerCase().includes('registered') || errorMsg.toLowerCase().includes('taken') || errorMsg.toLowerCase().includes('exists')) && (
               <button
                 type="button"
                 onClick={() => {
@@ -228,7 +228,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 }}
                 className="text-[11px] text-amber-300 hover:text-amber-200 underline font-semibold flex items-center gap-1 cursor-pointer"
               >
-                <span>Log in to @{username} instead?</span>
+                <span>Switch to Log In with this account →</span>
               </button>
             )}
           </div>

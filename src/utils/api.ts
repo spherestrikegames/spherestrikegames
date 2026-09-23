@@ -461,7 +461,7 @@ export async function registerAccountApi(
     throw new Error('Unable to connect to the game server. Please check your internet connection and try again.');
   }
 
-  const data = await safeParseResponse(res, 'Registration failed. Please choose another username.');
+  const data = await safeParseResponse(res, 'Registration failed. Please check your credentials.');
   return data.user;
 }
 

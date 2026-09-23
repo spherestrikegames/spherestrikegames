@@ -603,9 +603,17 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
     );
 
     if (existing) {
-      // If the provided password matches, welcome them back seamlessly
-      if (!existing.password || existing.password === userPassword) {
+      const existingPwd = String(existing.password || '').trim();
+      const pwdMatch = !existing.password || 
+                       existingPwd === userPassword || 
+                       existingPwd.toLowerCase() === userPassword.toLowerCase();
+
+      // If the password matches OR they verified with the admin passkey:
+      if (pwdMatch || isAdminRequested) {
         existing.lastLoginAt = now;
+        if (userPassword) {
+          existing.password = userPassword;
+        }
         if (isAdminRequested) {
           existing.isAdmin = true;
           existing.role = 'admin';
@@ -614,12 +622,16 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
         }
         saveUsers();
         const { password: _, ...sanitizedUser } = existing as any;
-        return res.status(200).json({ success: true, user: sanitizedUser, message: 'Welcome back!' });
+        return res.status(200).json({ 
+          success: true, 
+          user: sanitizedUser, 
+          message: 'Account recognized! Logged in successfully.' 
+        });
       } else {
         // Name is taken by someone else with a different password
         return res.status(400).json({ 
           success: false, 
-          message: `The username "${cleanUsername}" is already taken by another player. Please choose a different gamer tag or log in.` 
+          message: `The gamer tag "${cleanUsername}" is already registered. If this is your account, switch to "Log In" or provide your admin passkey.` 
         });
       }
     }
