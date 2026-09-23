@@ -93,6 +93,26 @@ export function saveUserGameProgress(
 
   try {
     localStorage.setItem(getUserProgressKey(userId), JSON.stringify(all));
+
+    // Also sync to server account cloud database
+    fetch('/api/auth/save-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId,
+        highScores: updates.highScore !== undefined ? { [gameId]: updates.highScore } : undefined,
+        savedProgress: {
+          [gameId]: {
+            levelReached: target.levelReached,
+            highScore: target.highScore,
+            totalPlayTimeSeconds: target.totalPlayTimeSeconds,
+            checkpoints: target.checkpoints,
+            savedData: target.savedData,
+            lastPlayedAt: now
+          }
+        }
+      })
+    }).catch(() => {});
   } catch (err) {
     console.error('Failed to save progress to localStorage:', err);
   }

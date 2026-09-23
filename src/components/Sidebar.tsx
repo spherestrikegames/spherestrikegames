@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   Home, Flame, History, Heart, Upload, Code2, 
   Gamepad2, Rocket, Target, Boxes, Compass, Smile, Trophy, Tv, Users, GraduationCap,
-  ChevronLeft, ChevronRight, Edit3, Sparkles
+  ChevronLeft, ChevronRight, Edit3, Sparkles, ShieldCheck, Shield
 } from 'lucide-react';
 import { GameGenre } from '../types/game';
 import { SphereStrikeLogo } from './SphereStrikeLogo';
@@ -19,6 +19,8 @@ interface SidebarProps {
   updatedGamesCount: number;
   favoritesCount: number;
   myCreatedGamesCount: number;
+  isAdmin?: boolean;
+  onOpenAdminTerminal?: () => void;
 }
 
 interface CategoryItem {
@@ -52,6 +54,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   updatedGamesCount,
   favoritesCount,
   myCreatedGamesCount,
+  isAdmin = false,
+  onOpenAdminTerminal,
 }) => {
   return (
     <>
@@ -263,6 +267,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <Code2 className="w-4 h-4 text-slate-400 shrink-0" />
               {isOpen && <span>Sandbox Studio</span>}
+            </button>
+
+            {/* Admin Mode Quick Access */}
+            <button
+              onClick={onOpenAdminTerminal}
+              title={isAdmin ? "Admin Security & Moderation Hub" : "Secret Admin Access"}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer ${
+                isAdmin
+                  ? 'bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                  : 'text-slate-400 hover:bg-white/[0.05] hover:text-slate-200'
+              }`}
+            >
+              <ShieldCheck className={`w-4 h-4 shrink-0 ${isAdmin ? 'text-emerald-400 animate-pulse' : 'text-slate-400'}`} />
+              {isOpen && (
+                <div className="flex items-center justify-between flex-1 overflow-hidden">
+                  <span className="truncate">{isAdmin ? 'Admin Sentinel' : 'Admin Terminal'}</span>
+                  {isAdmin && (
+                    <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold uppercase">
+                      AI Active
+                    </span>
+                  )}
+                </div>
+              )}
             </button>
           </div>
         </div>

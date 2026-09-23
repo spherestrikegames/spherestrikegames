@@ -139,12 +139,24 @@ export default function App() {
     });
   };
 
-  // Load games from API
+  // Load games from API and handle direct shared game links
   const loadGamesData = async () => {
     setIsLoading(true);
     try {
       const data = await fetchAllGames();
       setGames(data);
+
+      // Check if URL contains a shared game link parameter
+      const params = new URLSearchParams(window.location.search);
+      const sharedTarget = params.get('game') || params.get('play');
+      if (sharedTarget && data && data.length > 0) {
+        const query = sharedTarget.toLowerCase();
+        const matched = data.find(g => g.id.toLowerCase() === query || g.slug.toLowerCase() === query);
+        if (matched) {
+          setSelectedGame(matched);
+          setCurrentView('player');
+        }
+      }
     } catch (err) {
       console.error('Error fetching games:', err);
     } finally {
@@ -333,6 +345,14 @@ export default function App() {
         updatedGamesCount={updatedGamesCount}
         favoritesCount={favoriteIds.length}
         myCreatedGamesCount={myCreatedGames.length}
+        isAdmin={isAdmin}
+        onOpenAdminTerminal={() => {
+          if (currentView !== 'arcade') setCurrentView('arcade');
+          setTimeout(() => {
+            const el = document.getElementById('admin-terminal-section');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+          }, 100);
+        }}
       />
 
       {/* Main Content Area - shifts with sidebar on desktop */}

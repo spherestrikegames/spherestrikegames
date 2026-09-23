@@ -34,7 +34,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
@@ -53,13 +53,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
 
       setIsLoading(true);
-      setTimeout(() => {
-        const user = registerUser(username, email);
+      try {
+        const user = await registerUser(username, email, password);
         migrateGuestProgressToUser(user.id);
         setIsLoading(false);
         onSuccess(user);
         onClose();
-      }, 400);
+      } catch (err: any) {
+        setIsLoading(false);
+        setErrorMsg(err.message || 'Registration failed.');
+      }
     } else {
       // Login
       const identifier = email || username;
@@ -73,30 +76,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
 
       setIsLoading(true);
-      setTimeout(() => {
-        try {
-          const user = loginUser(identifier);
-          migrateGuestProgressToUser(user.id);
-          setIsLoading(false);
-          onSuccess(user);
-          onClose();
-        } catch (err: any) {
-          setIsLoading(false);
-          setErrorMsg(err.message || 'Authentication failed.');
-        }
-      }, 400);
+      try {
+        const user = await loginUser(identifier, password);
+        migrateGuestProgressToUser(user.id);
+        setIsLoading(false);
+        onSuccess(user);
+        onClose();
+      } catch (err: any) {
+        setIsLoading(false);
+        setErrorMsg(err.message || 'Authentication failed. Please check your credentials.');
+      }
     }
-  };
-
-  const handleDemoLogin = () => {
-    setIsLoading(true);
-    setTimeout(() => {
-      const demoUser = loginUser('SpherePilot');
-      migrateGuestProgressToUser(demoUser.id);
-      setIsLoading(false);
-      onSuccess(demoUser);
-      onClose();
-    }, 300);
   };
 
   return (
@@ -281,20 +271,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </button>
         </form>
 
-        {/* Quick Demo Gamer Login */}
-        <div className="mt-5 pt-5 border-t border-white/[0.08] text-center space-y-3">
+        {/* Security & Multi-Account note */}
+        <div className="mt-5 pt-4 border-t border-white/[0.08] text-center">
           <p className="text-[11px] text-slate-400">
-            Want to test arcade features immediately?
+            Account progress, high scores, and games are saved permanently to the cloud server database.
           </p>
-          <button
-            type="button"
-            onClick={handleDemoLogin}
-            disabled={isLoading}
-            className="w-full py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.1] text-xs font-semibold text-slate-200 hover:text-white transition-all cursor-pointer flex items-center justify-center gap-2"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>Instant Demo Gamer Log In</span>
-          </button>
         </div>
       </div>
     </div>

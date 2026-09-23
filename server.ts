@@ -43,70 +43,16 @@ const AUDIT_INTERVAL_MS = 3600000; // 1 Hour
 const INITIAL_USERS_SEED: User[] = [
   {
     id: 'user-admin-001',
-    username: 'rishi_admin',
+    username: 'Rishi_admin',
     email: 'rishi.p1.goyal@gmail.com',
     joinedAt: new Date(Date.now() - 86400000 * 30).toISOString(),
     gamesPlayed: 142,
     gamesCreatedCount: 5,
     isBlocked: false,
     isFlagged: false,
-    suspiciousScore: 2,
+    suspiciousScore: 0,
     aiRiskCategory: 'Clean Verified Administrator',
     aiExplanation: 'System Administrator account. No anomalies or malicious activity detected.'
-  },
-  {
-    id: 'user-player-002',
-    username: 'pixel_ninja',
-    email: 'pixel.ninja@arcade.io',
-    joinedAt: new Date(Date.now() - 86400000 * 12).toISOString(),
-    gamesPlayed: 84,
-    gamesCreatedCount: 2,
-    isBlocked: false,
-    isFlagged: false,
-    suspiciousScore: 8,
-    aiRiskCategory: 'Active Player',
-    aiExplanation: 'Regular user profile with genuine game engagement and standard upload velocity.'
-  },
-  {
-    id: 'user-bot-003',
-    username: 'x_spam_bot_882',
-    email: 'temp_user_9921@trashmail.xyz',
-    joinedAt: new Date(Date.now() - 1800000).toISOString(), // 30 mins ago
-    gamesPlayed: 0,
-    gamesCreatedCount: 28,
-    isBlocked: false,
-    isFlagged: true,
-    flagReason: 'High risk bot pattern: 28 games created in 30 minutes from disposable domain.',
-    suspiciousScore: 92,
-    aiRiskCategory: 'Creation Flood / Bot Spammer',
-    aiExplanation: 'Account created 30 minutes ago published 28 games in high frequency. Disposable email domain detected (@trashmail.xyz).'
-  },
-  {
-    id: 'user-hacker-004',
-    username: 'score_hacker_1337',
-    email: 'score_hacker@darknet.org',
-    joinedAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-    gamesPlayed: 320,
-    gamesCreatedCount: 1,
-    isBlocked: false,
-    isFlagged: true,
-    flagReason: 'Score tampering detected: impossible integer score overflow.',
-    suspiciousScore: 88,
-    aiRiskCategory: 'Score Manipulation',
-    aiExplanation: 'Logged impossible high scores (>9,999,999 pts in under 2 seconds) across 14 titles within 5 minutes.'
-  },
-  {
-    id: 'user-casual-005',
-    username: 'retro_gamer_sam',
-    email: 'sam.retro@gmail.com',
-    joinedAt: new Date(Date.now() - 86400000 * 5).toISOString(),
-    gamesPlayed: 29,
-    gamesCreatedCount: 1,
-    isBlocked: false,
-    isFlagged: false,
-    suspiciousScore: 5,
-    aiRiskCategory: 'Casual Player',
-    aiExplanation: 'Normal gaming behavior and verified email domain.'
   }
 ];
 
@@ -144,7 +90,16 @@ function loadUsers() {
   try {
     if (fs.existsSync(USERS_FILE)) {
       const raw = fs.readFileSync(USERS_FILE, 'utf-8');
-      users = JSON.parse(raw);
+      const loaded: User[] = JSON.parse(raw);
+      // Clean up all sample bot / fake email accounts, keeping only Rishi_admin and real accounts
+      users = loaded.filter(u => 
+        u.username.toLowerCase() === 'rishi_admin' || 
+        u.id === 'user-admin-001'
+      );
+      if (users.length === 0) {
+        users = [...INITIAL_USERS_SEED];
+      }
+      saveUsers();
     } else {
       users = [...INITIAL_USERS_SEED];
       saveUsers();
@@ -152,6 +107,7 @@ function loadUsers() {
   } catch (err) {
     console.error('Error loading users from disk, using seed:', err);
     users = [...INITIAL_USERS_SEED];
+    saveUsers();
   }
 }
 
@@ -190,6 +146,22 @@ app.post('/api/games', (req: Request, res: Response) => {
     const body = req.body;
     if (!body.title || (!body.code && !body.embedUrl)) {
       return res.status(400).json({ success: false, message: 'Game name and either game link or code are required' });
+    }
+
+    // Check if author is blocked
+    const authorName = (body.author || '').trim().toLowerCase();
+    const matchedUser = users.find(u => u.username.toLowerCase() === authorName || u.email.toLowerCase() === authorName || (body.authorId && u.id === body.authorId));
+    if (matchedUser && matchedUser.isBlocked) {
+      return res.status(403).json({ 
+        success: false, 
+        message: `Account suspended: ${matchedUser.blockedReason || 'This account has been blocked by an administrator due to reported suspicious behavior.'}` 
+      });
+    }
+
+    // Update user gamesCreatedCount if user exists
+    if (matchedUser) {
+      matchedUser.gamesCreatedCount = (matchedUser.gamesCreatedCount || 0) + 1;
+      saveUsers();
     }
 
     const newId = 'game-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
@@ -357,8 +329,18 @@ app.post('/api/games/:id/comments', (req: Request, res: Response) => {
   const game = games.find(g => g.id === req.params.id);
   if (!game) return res.status(404).json({ success: false, message: 'Game not found' });
 
-  const { author, text, rating } = req.body;
+  const { author, text, rating, authorId } = req.body;
   if (!text) return res.status(400).json({ success: false, message: 'Comment text required' });
+
+  // Check if commenter is blocked
+  const commenterName = (author || '').trim().toLowerCase();
+  const matchedUser = users.find(u => u.username.toLowerCase() === commenterName || u.email.toLowerCase() === commenterName || (authorId && u.id === authorId));
+  if (matchedUser && matchedUser.isBlocked) {
+    return res.status(403).json({ 
+      success: false, 
+      message: `Account suspended: ${matchedUser.blockedReason || 'This account has been blocked by an administrator due to reported suspicious behavior.'}` 
+    });
+  }
 
   const newComment = {
     id: 'c-' + Date.now(),
@@ -565,17 +547,207 @@ Provide a structured security report evaluating each account. Return JSON matchi
 
 // User endpoints
 app.get('/api/users', (req: Request, res: Response) => {
-  res.json({ success: true, users });
+  // Return users with passwords omitted for privacy
+  const sanitized = users.map(u => {
+    const { password, ...rest } = u as any;
+    return rest;
+  });
+  res.json({ success: true, users: sanitized });
+});
+
+// Robust Multi-Account Registration Endpoint
+app.post('/api/auth/register', (req: Request, res: Response) => {
+  try {
+    const { username, email, password } = req.body;
+    if (!username || !email || !password) {
+      return res.status(400).json({ success: false, message: 'Username, email, and password are required.' });
+    }
+
+    const cleanUsername = String(username).trim();
+    const cleanEmail = String(email).trim().toLowerCase();
+
+    // Check duplicate
+    const exists = users.some(
+      u => u.username.toLowerCase() === cleanUsername.toLowerCase() || u.email.toLowerCase() === cleanEmail
+    );
+    if (exists) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'An account with that username or email already exists. Please log in or choose a different name.' 
+      });
+    }
+
+    const newId = 'user-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6);
+    const now = new Date().toISOString();
+
+    const newUser: User = {
+      id: newId,
+      username: cleanUsername,
+      email: cleanEmail,
+      password: String(password),
+      joinedAt: now,
+      lastLoginAt: now,
+      gamesPlayed: 0,
+      gamesCreatedCount: 0,
+      highScores: {},
+      savedProgress: {},
+      favoriteGameIds: [],
+      createdGameIds: [],
+      isBlocked: false,
+      isFlagged: false,
+      suspiciousScore: 0
+    };
+
+    users.push(newUser);
+    saveUsers();
+
+    const { password: _, ...sanitizedUser } = newUser as any;
+    res.status(201).json({ success: true, user: sanitizedUser });
+  } catch (err: any) {
+    console.error('Error during registration:', err);
+    res.status(500).json({ success: false, message: 'Server error during registration.' });
+  }
+});
+
+// Real Account Login Endpoint
+app.post('/api/auth/login', (req: Request, res: Response) => {
+  try {
+    const { identifier, password } = req.body;
+    if (!identifier || !password) {
+      return res.status(400).json({ success: false, message: 'Username/email and password are required.' });
+    }
+
+    const query = String(identifier).trim().toLowerCase();
+    const user = users.find(u => u.email.toLowerCase() === query || u.username.toLowerCase() === query);
+
+    if (!user) {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Account not found. Please verify your credentials or create a new account.' 
+      });
+    }
+
+    if (user.isBlocked) {
+      return res.status(403).json({ 
+        success: false, 
+        message: `Account suspended: ${user.blockedReason || 'This account has been blocked by an administrator.'}` 
+      });
+    }
+
+    // Check password if set
+    if (user.password && user.password !== String(password)) {
+      return res.status(401).json({ success: false, message: 'Incorrect password. Please try again.' });
+    }
+
+    // Update last login
+    user.lastLoginAt = new Date().toISOString();
+    if (!user.password) {
+      user.password = String(password); // Set initial password for legacy seeds
+    }
+    saveUsers();
+
+    const { password: _, ...sanitizedUser } = user as any;
+    res.json({ success: true, user: sanitizedUser });
+  } catch (err: any) {
+    console.error('Error during login:', err);
+    res.status(500).json({ success: false, message: 'Server error during login.' });
+  }
+});
+
+// Save Multi-Account Data (high scores, progress, favorites)
+app.post('/api/auth/save-data', (req: Request, res: Response) => {
+  try {
+    const { userId, highScores, savedProgress, favoriteGameIds, createdGameIds, gamesPlayed } = req.body;
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'userId is required' });
+    }
+
+    const user = users.find(u => u.id === userId || u.username.toLowerCase() === userId.toLowerCase());
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'Account not found' });
+    }
+
+    if (user.isBlocked) {
+      return res.status(403).json({ success: false, message: 'Account is blocked' });
+    }
+
+    if (highScores) user.highScores = { ...user.highScores, ...highScores };
+    if (savedProgress) user.savedProgress = { ...user.savedProgress, ...savedProgress };
+    if (Array.isArray(favoriteGameIds)) user.favoriteGameIds = favoriteGameIds;
+    if (Array.isArray(createdGameIds)) user.createdGameIds = createdGameIds;
+    if (typeof gamesPlayed === 'number') user.gamesPlayed = gamesPlayed;
+
+    saveUsers();
+    const { password: _, ...sanitizedUser } = user as any;
+    res.json({ success: true, user: sanitizedUser });
+  } catch (err: any) {
+    console.error('Error saving account data:', err);
+    res.status(500).json({ success: false, message: 'Server error saving account data.' });
+  }
+});
+
+// Accounts Data Export / Backup for High-Capacity Archival
+app.get('/api/admin/accounts/export', (req: Request, res: Response) => {
+  const sanitized = users.map(u => {
+    const { password, ...rest } = u as any;
+    return rest;
+  });
+  res.setHeader('Content-Disposition', `attachment; filename="spherestrike_accounts_backup_${Date.now()}.json"`);
+  res.json({
+    exportedAt: new Date().toISOString(),
+    totalAccounts: sanitized.length,
+    users: sanitized
+  });
+});
+
+// Accounts Data Bulk Import / Restore
+app.post('/api/admin/accounts/import', (req: Request, res: Response) => {
+  try {
+    const importedUsers: User[] = req.body.users || req.body;
+    if (!Array.isArray(importedUsers)) {
+      return res.status(400).json({ success: false, message: 'Invalid accounts format: expected an array of users' });
+    }
+
+    let addedCount = 0;
+    let updatedCount = 0;
+
+    importedUsers.forEach(imp => {
+      if (!imp.id || !imp.username) return;
+      const idx = users.findIndex(u => u.id === imp.id || u.username.toLowerCase() === imp.username.toLowerCase());
+      if (idx !== -1) {
+        users[idx] = { ...users[idx], ...imp };
+        updatedCount++;
+      } else {
+        users.push({
+          ...imp,
+          joinedAt: imp.joinedAt || new Date().toISOString(),
+          gamesPlayed: imp.gamesPlayed || 0,
+          gamesCreatedCount: imp.gamesCreatedCount || 0
+        });
+        addedCount++;
+      }
+    });
+
+    saveUsers();
+    res.json({ 
+      success: true, 
+      message: `Successfully imported accounts: ${addedCount} added, ${updatedCount} updated. Total stored: ${users.length}`,
+      totalAccounts: users.length 
+    });
+  } catch (err: any) {
+    console.error('Error importing accounts:', err);
+    res.status(500).json({ success: false, message: 'Failed to import accounts: ' + err.message });
+  }
 });
 
 app.post('/api/users', (req: Request, res: Response) => {
   try {
     const body: Partial<User> = req.body;
-    if (!body.email && !body.username) {
-      return res.status(400).json({ success: false, message: 'Username or email required' });
+    if (!body.email || !body.email.includes('@') || !body.username) {
+      return res.status(400).json({ success: false, message: 'Real valid email and username are required. No random or placeholder emails permitted.' });
     }
 
-    const email = (body.email || `${body.username}@spherestrike.games`).toLowerCase().trim();
+    const email = body.email.toLowerCase().trim();
     const existingIndex = users.findIndex(u => u.email.toLowerCase() === email || (u.id && u.id === body.id));
 
     let userRecord: User;
@@ -590,14 +762,14 @@ app.post('/api/users', (req: Request, res: Response) => {
     } else {
       userRecord = {
         id: body.id || 'user-' + Date.now().toString(36),
-        username: body.username || email.split('@')[0],
+        username: body.username,
         email,
         joinedAt: body.joinedAt || new Date().toISOString(),
         gamesPlayed: body.gamesPlayed || 0,
         gamesCreatedCount: body.gamesCreatedCount || 0,
         isBlocked: false,
         isFlagged: false,
-        suspiciousScore: 5
+        suspiciousScore: 0
       };
       users.push(userRecord);
     }

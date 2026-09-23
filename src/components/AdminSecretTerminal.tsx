@@ -39,7 +39,7 @@ export const AdminSecretTerminal: React.FC<AdminSecretTerminalProps> = ({
   };
 
   return (
-    <section className="mt-14 mb-8 max-w-5xl mx-auto px-4 sm:px-6">
+    <section id="admin-terminal-section" className="mt-14 mb-8 max-w-5xl mx-auto px-4 sm:px-6">
       <div className={`relative overflow-hidden rounded-3xl border transition-all duration-300 p-6 sm:p-8 backdrop-blur-xl ${
         isAdmin 
           ? 'bg-[#0f1a18]/90 border-emerald-500/30 shadow-2xl shadow-emerald-950/40' 

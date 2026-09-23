@@ -199,9 +199,15 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   };
 
   const handleShare = () => {
-    navigator.clipboard.writeText(window.location.href);
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set('game', game.slug || game.id);
+      navigator.clipboard.writeText(url.toString());
+    } catch {
+      navigator.clipboard.writeText(`${window.location.origin}/?game=${game.slug || game.id}`);
+    }
     setCopiedShare(true);
-    setTimeout(() => setCopiedShare(false), 2500);
+    setTimeout(() => setCopiedShare(false), 3000);
   };
 
   const handleAddComment = async (e: React.FormEvent) => {

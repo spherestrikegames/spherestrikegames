@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   ShieldAlert, ShieldCheck, Lock, Unlock, RefreshCw, Sparkles, 
   Search, Filter, UserX, UserCheck, AlertTriangle, Clock, 
-  Zap, CheckCircle2, AlertOctagon, Info
+  Zap, CheckCircle2, AlertOctagon, Info, Database, Download, Upload, HardDrive
 } from 'lucide-react';
 import { User } from '../types/user';
 import { AiAuditReport } from '../types/admin';
 import { 
   fetchAllUsers, blockUserAccount, unblockUserAccount, 
-  triggerAiSecurityAudit, fetchAiAuditStatus 
+  triggerAiSecurityAudit, fetchAiAuditStatus, exportAccountsBackupApi, importAccountsBackupApi 
 } from '../utils/api';
 
 export const AdminAccountMonitor: React.FC = () => {
@@ -23,6 +23,7 @@ export const AdminAccountMonitor: React.FC = () => {
   const [customReason, setCustomReason] = useState<string>('');
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<string>('60:00');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load users & audit report status
   const loadData = async () => {
@@ -127,6 +128,48 @@ export const AdminAccountMonitor: React.FC = () => {
     setTimeout(() => setActionNotice(null), 3000);
   };
 
+  // Export all accounts JSON backup for saving lots of accounts data
+  const handleExportBackup = async () => {
+    try {
+      const data = await exportAccountsBackupApi();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `spherestrike_accounts_backup_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setActionNotice(`💾 Backup downloaded! Saved ${data.totalAccounts} accounts with all progress & stats.`);
+      setTimeout(() => setActionNotice(null), 5000);
+    } catch (err: any) {
+      alert('Failed to export accounts backup: ' + err.message);
+    }
+  };
+
+  // Import accounts JSON backup
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const text = evt.target?.result as string;
+        const parsed = JSON.parse(text);
+        const result = await importAccountsBackupApi(parsed);
+        setActionNotice(`✅ ${result.message}`);
+        setTimeout(() => setActionNotice(null), 6000);
+        loadData();
+      } catch (err: any) {
+        alert('Failed to import backup: ' + (err.message || 'Invalid JSON file format'));
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
   // Filtered users list
   const filteredUsers = users.filter(user => {
     const matchesSearch = 
@@ -227,6 +270,57 @@ export const AdminAccountMonitor: React.FC = () => {
         </div>
       </div>
 
+      {/* Multi-Account Cloud Data Storage & Backup Hub */}
+      <div className="p-4 sm:p-5 rounded-2xl bg-[#0d1627] border border-blue-500/25 shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="p-2.5 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30 shrink-0">
+            <HardDrive className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h4 className="text-sm font-bold text-white font-['Outfit']">
+                Multi-Account Cloud Storage & Backup Hub
+              </h4>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 font-bold uppercase">
+                High-Capacity Ready (10,000+ Accounts)
+              </span>
+            </div>
+            <p className="text-xs text-slate-300 mt-1">
+              All account credentials, high scores, checkpoints, favorites, and creator uploads are permanently saved to disk (<code className="text-blue-300 font-mono">data/users.json</code>).
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2.5 shrink-0">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept=".json"
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="px-3.5 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 hover:text-white border border-white/[0.1] text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5"
+            title="Import/Restore user accounts from JSON backup file"
+          >
+            <Upload className="w-3.5 h-3.5 text-slate-400" />
+            <span>Restore Backup</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleExportBackup}
+            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-[0.98] text-white text-xs font-bold shadow-lg shadow-blue-950 border border-blue-400/30 transition-all cursor-pointer flex items-center gap-1.5"
+            title="Download full JSON backup of all registered accounts & progress"
+          >
+            <Download className="w-3.5 h-3.5 text-blue-200" />
+            <span>Download Accounts JSON</span>
+          </button>
+        </div>
+      </div>
+
       {/* Hourly Automated AI Audit Control Banner */}
       <div className="p-5 rounded-2xl bg-gradient-to-r from-blue-950/60 via-indigo-950/50 to-slate-900/80 border border-blue-500/30 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-start gap-3">
@@ -274,6 +368,77 @@ export const AdminAccountMonitor: React.FC = () => {
         <div className="p-3.5 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-200 text-xs font-semibold flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
           <span>{actionNotice}</span>
+        </div>
+      )}
+
+      {/* High-Priority: Reported Suspicious Behavior Action Deck */}
+      {users.some(u => (u.isFlagged || (u.suspiciousScore || 0) >= 60) && !u.isBlocked) && (
+        <div className="p-5 rounded-2xl bg-gradient-to-r from-rose-950/70 via-red-950/50 to-amber-950/40 border border-rose-500/50 shadow-xl space-y-3 animate-in fade-in">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-rose-500/20 text-rose-400 border border-rose-500/40 animate-pulse">
+                <AlertOctagon className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-white font-['Outfit'] flex items-center gap-2">
+                  <span>🚨 Suspicious Behavior Reported by AI</span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-rose-500/30 text-rose-200 border border-rose-500/50 font-bold uppercase">
+                    Admin Action Required
+                  </span>
+                </h4>
+                <p className="text-xs text-rose-200/90 mt-0.5">
+                  The AI security audit detected high-risk activity on the following accounts. You can block them immediately below.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-2.5 pt-2">
+            {users
+              .filter(u => (u.isFlagged || (u.suspiciousScore || 0) >= 60) && !u.isBlocked)
+              .map(susUser => (
+                <div 
+                  key={`sus-alert-${susUser.id}`}
+                  className="p-3.5 rounded-xl bg-black/50 border border-rose-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-white text-sm font-mono">@{susUser.username}</span>
+                      <span className="text-xs text-slate-400 font-mono">({susUser.email})</span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 font-bold">
+                        Risk: {susUser.suspiciousScore || 85}%
+                      </span>
+                      {susUser.aiRiskCategory && (
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                          {susUser.aiRiskCategory}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-rose-200/90 font-mono">
+                      <strong>AI Report:</strong> {susUser.aiExplanation || susUser.flagReason || 'Unusual creation frequency or score tampering detected.'}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleBlockUser(susUser.id, susUser.username)}
+                      className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-[0.98] text-white text-xs font-bold shadow-lg shadow-rose-950 border border-rose-400/40 transition-all cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Block Account</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleClearFlags(susUser.id)}
+                      className="px-3 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 hover:text-white text-xs font-medium transition-all cursor-pointer"
+                    >
+                      Dismiss Flag
+                    </button>
+                  </div>
+                </div>
+              ))}
+          </div>
         </div>
       )}
 

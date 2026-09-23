@@ -395,3 +395,68 @@ export async function checkAccountStatus(userId: string): Promise<{ isBlocked: b
   return { isBlocked: false, blocked: false };
 }
 
+export async function registerAccountApi(username: string, email: string, password: string): Promise<User> {
+  const res = await fetch('/api/auth/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, email, password })
+  });
+  const data = await res.json();
+  if (!res.ok || !data.success) {
+    throw new Error(data.message || 'Registration failed.');
+  }
+  return data.user;
+}
+
+export async function loginAccountApi(identifier: string, password: string): Promise<User> {
+  const res = await fetch('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identifier, password })
+  });
+  const data = await res.json();
+  if (!res.ok || !data.success) {
+    throw new Error(data.message || 'Login failed.');
+  }
+  return data.user;
+}
+
+export async function saveAccountDataApi(userId: string, accountData: {
+  highScores?: Record<string, number>;
+  savedProgress?: Record<string, any>;
+  favoriteGameIds?: string[];
+  createdGameIds?: string[];
+  gamesPlayed?: number;
+}): Promise<User> {
+  const res = await fetch('/api/auth/save-data', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId, ...accountData })
+  });
+  const data = await res.json();
+  if (!res.ok || !data.success) {
+    throw new Error(data.message || 'Failed to save account data.');
+  }
+  return data.user;
+}
+
+export async function exportAccountsBackupApi(): Promise<any> {
+  const res = await fetch('/api/admin/accounts/export');
+  if (!res.ok) throw new Error('Failed to export accounts backup.');
+  return await res.json();
+}
+
+export async function importAccountsBackupApi(importedData: any): Promise<{ success: boolean; message: string; totalAccounts: number }> {
+  const res = await fetch('/api/admin/accounts/import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(importedData)
+  });
+  const data = await res.json();
+  if (!res.ok || !data.success) {
+    throw new Error(data.message || 'Failed to import accounts backup.');
+  }
+  return data;
+}
+
+
