@@ -79,10 +79,6 @@ function loadUsers() {
       const loaded: User[] = JSON.parse(raw);
       // Remove old hardcoded test seed account if present, keep all real user accounts
       users = loaded.filter(u => u.id !== 'user-admin-001');
-      const rishiAdmin = users.find(u => u.username.toLowerCase() === 'rishi_admin');
-      if (rishiAdmin) {
-        rishiAdmin.password = 'MacBookair';
-      }
       saveUsers();
     } else {
       users = [];
@@ -660,6 +656,21 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
   } catch (err: any) {
     console.error('Error during registration:', err);
     res.status(500).json({ success: false, message: 'Server error during registration.' });
+  }
+});
+
+// Delete all accounts endpoint (Admin only access)
+app.delete('/api/users', (req: Request, res: Response) => {
+  try {
+    if (!isCallerAdmin(req)) {
+      return res.status(403).json({ success: false, message: 'Admin clearance required to wipe user accounts.' });
+    }
+    const count = users.length;
+    users = [];
+    saveUsers();
+    return res.json({ success: true, message: `Successfully deleted all accounts (${count} removed).` });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 

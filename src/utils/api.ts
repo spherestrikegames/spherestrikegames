@@ -478,6 +478,19 @@ export async function deleteUserAccountApi(userId: string): Promise<boolean> {
   }
 }
 
+export async function deleteAllUserAccountsApi(): Promise<boolean> {
+  try {
+    const res = await fetch('/api/users', { 
+      method: 'DELETE',
+      headers: getAdminHeaders()
+    });
+    const data = await safeParseResponse(res, 'Failed to delete all users.');
+    return Boolean(res.ok && data.success);
+  } catch {
+    return false;
+  }
+}
+
 export async function loginAccountApi(identifier: string, password: string): Promise<User> {
   let res: Response;
   try {
