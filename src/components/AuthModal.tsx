@@ -41,27 +41,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setErrorMsg('');
 
     if (mode === 'signup') {
-      if (!username.trim()) {
+      const cleanUser = username.trim();
+      if (!cleanUser) {
         setErrorMsg('Please enter a username or gamer tag.');
         return;
       }
-      if (!email.trim() || !email.includes('@')) {
-        setErrorMsg('Please enter a valid email address.');
-        return;
-      }
-      if (!password || password.length < 4) {
-        setErrorMsg('Password must be at least 4 characters.');
-        return;
-      }
+      const safeEmail = email.trim() && email.includes('@')
+        ? email.trim()
+        : `${cleanUser.toLowerCase().replace(/[^a-z0-9_-]/g, '')}@player.local`;
+      const safePassword = password.trim() || 'SpherePlayer2026';
 
       setIsLoading(true);
       try {
         const user = await registerUser(
-          username, 
-          email, 
-          password, 
+          cleanUser, 
+          safeEmail, 
+          safePassword, 
           adminPasskey.trim() || undefined,
-          isAdminRegister || username.toLowerCase().includes('admin')
+          isAdminRegister || cleanUser.toLowerCase().includes('admin')
         );
         hydrateUserProgressFromServer(user);
         migrateGuestProgressToUser(user.id);
@@ -283,7 +280,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       type="password"
                       value={adminPasskey}
                       onChange={(e) => setAdminPasskey(e.target.value)}
-                      placeholder="Enter Admin Passkey (e.g. MacBookAir)"
+                      placeholder="Enter secret administrator passkey"
                       className="w-full pl-9 pr-3 py-2 rounded-xl bg-amber-950/20 border border-amber-500/40 text-amber-200 placeholder:text-amber-500/50 text-xs focus:outline-none focus:border-amber-400"
                     />
                   </div>
