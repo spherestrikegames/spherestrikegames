@@ -992,6 +992,34 @@ app.post('/api/users/:id/unblock', (req: Request, res: Response) => {
   res.json({ success: true, message: `Account @${user.username} has been unblocked.`, user });
 });
 
+// Bulk Unblock All Accounts Endpoint (Admin only)
+app.post('/api/admin/unblock-all', (req: Request, res: Response) => {
+  if (!isCallerAdmin(req)) {
+    return res.status(403).json({ success: false, message: 'Admin clearance required to unblock accounts.' });
+  }
+
+  let unblockedCount = 0;
+  users.forEach(user => {
+    if (user.isBlocked || user.blockedReason || user.isFlagged) {
+      unblockedCount++;
+    }
+    user.isBlocked = false;
+    user.isFlagged = false;
+    user.blockedReason = undefined;
+    user.blockedAt = undefined;
+    user.suspiciousScore = Math.min(user.suspiciousScore || 0, 20); // Reset high suspicion
+  });
+
+  saveUsers();
+  console.log(`[Admin] All user accounts have been unblocked. Modified ${unblockedCount} accounts.`);
+  res.json({
+    success: true,
+    unblockedCount,
+    totalAccounts: users.length,
+    message: `All accounts have been successfully unblocked and cleared (${unblockedCount} account(s) updated).`
+  });
+});
+
 // Trigger Manual or Hourly AI Security Audit (Admin only)
 app.post('/api/admin/ai-security-audit', async (req: Request, res: Response) => {
   try {

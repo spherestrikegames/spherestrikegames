@@ -7,7 +7,7 @@ import {
 import { User } from '../types/user';
 import { AiAuditReport } from '../types/admin';
 import { 
-  fetchAllUsers, blockUserAccount, unblockUserAccount, 
+  fetchAllUsers, blockUserAccount, unblockUserAccount, unblockAllUserAccounts,
   triggerAiSecurityAudit, fetchAiAuditStatus, exportAccountsBackupApi, importAccountsBackupApi,
   deleteUserAccountApi 
 } from '../utils/api';
@@ -18,6 +18,7 @@ export const AdminAccountMonitor: React.FC = () => {
   const [nextScheduledAt, setNextScheduledAt] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isAuditing, setIsAuditing] = useState<boolean>(false);
+  const [isUnblockingAll, setIsUnblockingAll] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'flagged' | 'blocked' | 'active'>('all');
   const [blockingUserId, setBlockingUserId] = useState<string | null>(null);
@@ -114,6 +115,28 @@ export const AdminAccountMonitor: React.FC = () => {
       loadData();
     } else {
       alert('Failed to unblock account: ' + (result.message || 'Unknown error'));
+    }
+  };
+
+  // Bulk unblock all user accounts on the site
+  const handleUnblockAllAccounts = async () => {
+    if (!window.confirm('Are you sure you want to unblock ALL user accounts? This will immediately restore full access to every account.')) {
+      return;
+    }
+    setIsUnblockingAll(true);
+    try {
+      const result = await unblockAllUserAccounts();
+      if (result.success) {
+        setActionNotice(`🛡️ ${result.message || 'All user accounts have been successfully unblocked!'}`);
+        await loadData();
+        setTimeout(() => setActionNotice(null), 5000);
+      } else {
+        alert(result.message || 'Failed to unblock all accounts');
+      }
+    } catch (err: any) {
+      alert('Error unblocking accounts: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsUnblockingAll(false);
     }
   };
 
