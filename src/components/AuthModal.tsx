@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Lock, Mail, User as UserIcon, LogIn, UserPlus, Sparkles, CheckCircle2, Cloud, Trophy, Gamepad2, ShieldCheck, KeyRound } from 'lucide-react';
+import { X, Lock, Mail, User as UserIcon, LogIn, UserPlus, Sparkles, CheckCircle2, Cloud, Trophy, Gamepad2, ShieldCheck, KeyRound, Eye, EyeOff } from 'lucide-react';
 import { User, AuthMode } from '../types/user';
 import { loginUser, registerUser } from '../utils/auth';
 import { migrateGuestProgressToUser, hydrateUserProgressFromServer } from '../utils/progress';
@@ -27,6 +27,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [adminPasskey, setAdminPasskey] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [showPassword, setShowPassword] = useState<boolean>(false);
 
   // Sync mode when modal opens with a specific mode
   React.useEffect(() => {
@@ -227,7 +228,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {errorMsg && (
           <div className="p-3 mb-4 rounded-xl bg-rose-950/50 border border-rose-500/30 text-rose-300 text-xs font-medium animate-in fade-in space-y-1.5">
             <p>{errorMsg}</p>
-            {(errorMsg.toLowerCase().includes('already') || errorMsg.toLowerCase().includes('registered') || errorMsg.toLowerCase().includes('taken') || errorMsg.toLowerCase().includes('exists')) && (
+            {mode === 'signup' && (errorMsg.toLowerCase().includes('already') || errorMsg.toLowerCase().includes('registered') || errorMsg.toLowerCase().includes('taken') || errorMsg.toLowerCase().includes('exists')) && (
               <button
                 type="button"
                 onClick={() => {
@@ -236,7 +237,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 }}
                 className="text-[11px] text-amber-300 hover:text-amber-200 underline font-semibold flex items-center gap-1 cursor-pointer"
               >
-                <span>Switch to Log In with this account →</span>
+                <span>Switch to Log In with &ldquo;{username}&rdquo; →</span>
+              </button>
+            )}
+            {mode === 'login' && (errorMsg.toLowerCase().includes('not found') || errorMsg.toLowerCase().includes('create a new account')) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('signup');
+                  setErrorMsg('');
+                }}
+                className="text-[11px] text-blue-300 hover:text-blue-200 underline font-semibold flex items-center gap-1 cursor-pointer"
+              >
+                <span>Switch to Sign Up to create this account →</span>
               </button>
             )}
           </div>
@@ -257,7 +270,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <input
                     type="text"
                     value={username}
-                    onChange={(e) => setUsername(e.target.value)}
+                    onChange={(e) => {
+                      setUsername(e.target.value);
+                      if (errorMsg) setErrorMsg('');
+                    }}
                     placeholder="e.g. PixelKnight, StarStriker, Alex"
                     required
                     autoFocus
@@ -275,13 +291,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <div className="relative">
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (errorMsg) setErrorMsg('');
+                    }}
                     placeholder="Choose a password (min 3 chars)"
                     required
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white text-xs sm:text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                    className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white text-xs sm:text-sm focus:outline-none focus:border-blue-500 transition-colors"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                    aria-label="Toggle password visibility"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
 
@@ -296,7 +323,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <input
                     type="text"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (errorMsg) setErrorMsg('');
+                    }}
                     placeholder="you@domain.com (optional)"
                     className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white text-xs sm:text-sm focus:outline-none focus:border-blue-500 transition-colors"
                   />
@@ -318,6 +348,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     onChange={(e) => {
                       setUsername(e.target.value);
                       setEmail(e.target.value);
+                      if (errorMsg) setErrorMsg('');
                     }}
                     placeholder="Enter your gamer tag or email"
                     required
@@ -335,13 +366,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <div className="relative">
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (errorMsg) setErrorMsg('');
+                    }}
                     placeholder="Your password"
                     required
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white text-xs sm:text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                    className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white text-xs sm:text-sm focus:outline-none focus:border-blue-500 transition-colors"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                    aria-label="Toggle password visibility"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
             </>

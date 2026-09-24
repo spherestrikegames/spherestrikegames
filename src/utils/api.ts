@@ -428,17 +428,24 @@ async function safeParseResponse(res: Response, defaultError: string): Promise<a
       data = JSON.parse(text);
     } catch {
       // Prevents Safari/WebKit DOMException "The string did not match the expected pattern."
-      throw new Error(
+      const parseErr: any = new Error(
         res.status >= 500 
           ? 'Game server is currently busy or restarting. Please try again in a moment.'
           : res.status === 404
           ? 'Authentication service not reachable. Please reload the page.'
           : defaultError
       );
+      parseErr.status = res.status;
+      throw parseErr;
     }
   }
   if (!res.ok || (data && data.success === false)) {
-    throw new Error(data?.message || defaultError);
+    const errorMsg = data?.message || defaultError;
+    const err: any = new Error(errorMsg);
+    err.status = res.status;
+    err.code = data?.code;
+    err.username = data?.username;
+    throw err;
   }
   return data;
 }
