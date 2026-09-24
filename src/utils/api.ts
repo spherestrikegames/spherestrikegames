@@ -377,6 +377,40 @@ export async function unblockUserAccount(userId: string): Promise<{ success: boo
   }
 }
 
+export async function unblockAllUserAccounts(): Promise<{ success: boolean; message?: string }> {
+  try {
+    const res = await fetch('/api/users/unblock-all', {
+      method: 'POST',
+      headers: getAdminHeaders()
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success) {
+        const users = await fetchAllUsers();
+        users.forEach(u => {
+          u.isBlocked = false;
+          u.blockedReason = undefined;
+        });
+        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+        return { success: true, message: data.message || 'Unblocked all user accounts' };
+      }
+    }
+  } catch {}
+
+  // Local storage fallback for static hosting
+  try {
+    const users = await fetchAllUsers();
+    users.forEach(u => {
+      u.isBlocked = false;
+      u.blockedReason = undefined;
+    });
+    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+    return { success: true, message: 'Unblocked all user accounts.' };
+  } catch (err: any) {
+    return { success: false, message: err?.message || 'Failed to unblock user accounts.' };
+  }
+}
+
 export async function triggerAiSecurityAudit(): Promise<AiAuditReport> {
   const res = await fetch('/api/admin/ai-security-audit', { 
     method: 'POST',
