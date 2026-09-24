@@ -33,13 +33,13 @@ jobs:
       - name: Install dependencies
         run: |
           if [ -f package-lock.json ]; then
-            npm ci --legacy-peer-deps
+            npm ci
           else
-            npm install --legacy-peer-deps
+            npm install
           fi
 
-      - name: Type Check & Lint
-        run: npm run lint
+      - name: Test & Type Check
+        run: npm test
 
       - name: Build production bundle
         run: npm run build
