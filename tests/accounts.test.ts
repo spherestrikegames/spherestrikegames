@@ -175,4 +175,19 @@ assert.strictEqual(verifyAdminPasswordSubmission('wrongpassword').allowed, false
 assert.strictEqual(verifyAdminPasswordSubmission('').allowed, false);
 console.log('✓ Verified typing admin password to access panel logic');
 
+// 10. Test Crash Protection Removal
+import { validateGameCode, injectCrashProtection } from '../src/utils/codeShield';
+
+const rawGameCode = '<script>var x = 10; function run() { x++; }</script>';
+const validation = validateGameCode(rawGameCode);
+assert.strictEqual(validation.isValid, true);
+assert.strictEqual(validation.errors.length, 0);
+
+// Ensure injectCrashProtection returns the clean code directly without injecting crash overlays or shield traps
+const injected = injectCrashProtection(rawGameCode);
+assert.strictEqual(injected, rawGameCode);
+assert.strictEqual(injected.includes('SPHERESTRIKE_CRASH_SHIELD_ACTIVE'), false);
+assert.strictEqual(injected.includes('spherestrike-crash-overlay'), false);
+console.log('✓ Verified crash protection is completely removed from code runner and validators');
+
 console.log('All tests passed successfully!');

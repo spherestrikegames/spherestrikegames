@@ -459,11 +459,7 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
     let preparedCode = gameCode;
     if (method === 'code') {
       const safetyResult = validateGameCode(gameCode);
-      if (!safetyResult.isValid) {
-        alert('Cannot publish game: Crash Shield Hazard Detected\n\n' + safetyResult.errors.join('\n\n') + '\n\nPlease fix the infinite loop or hazardous pattern before publishing so players can enjoy your game without freezing.');
-        return;
-      }
-      preparedCode = safetyResult.preparedCode;
+      preparedCode = safetyResult.preparedCode || gameCode;
     }
 
     if (!coverImage || !coverImage.trim()) {
@@ -731,7 +727,7 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
               </div>
             )}
 
-            {/* Method: PURE CODE & SANDBOX (Write or paste code with crash protection) */}
+            {/* Method: PURE CODE & SANDBOX (Write or paste code) */}
             {method === 'code' && (
               <div className="space-y-4 p-5 rounded-2xl bg-blue-950/20 border border-blue-500/20">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -744,36 +740,7 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
                       Input your pure game code. Full HTML5 documents or raw JavaScript canvas scripts are automatically compiled into responsive playable games.
                     </p>
                   </div>
-                  {codeSafety?.isValid ? (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/60 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
-                      <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                      <span>Crash Shield: Safe</span>
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-950/80 border border-rose-500/40 text-rose-300 text-xs font-semibold">
-                      <ShieldAlert className="w-4 h-4 text-rose-400" />
-                      <span>Crash Hazard Detected</span>
-                    </span>
-                  )}
                 </div>
-
-                {/* Real-time Crash Shield Hazard Alert Banner */}
-                {codeSafety && !codeSafety.isValid && (
-                  <div className="p-4 rounded-xl bg-rose-950/40 border border-rose-500/40 space-y-2 text-rose-200">
-                    <div className="flex items-center gap-2 font-bold text-xs text-rose-400">
-                      <ShieldAlert className="w-4 h-4 shrink-0 text-rose-400" />
-                      <span>Crash Protection Alert — Publishing Blocked</span>
-                    </div>
-                    <ul className="text-xs list-disc list-inside space-y-1 text-rose-300/90 font-mono">
-                      {codeSafety.errors.map((err, idx) => (
-                        <li key={idx}>{err}</li>
-                      ))}
-                    </ul>
-                    <p className="text-[11px] text-slate-300 bg-black/40 p-2.5 rounded-lg border border-white/[0.06] leading-relaxed">
-                      💡 <strong>Safe Coding Tip:</strong> Browser games must yield control to the browser each frame. Replace synchronous loops like <code className="text-rose-300 font-mono">while(true)</code> with <code className="text-emerald-300 font-mono">requestAnimationFrame(gameLoop)</code> so your game runs at 60 FPS smoothly without freezing the browser!
-                    </p>
-                  </div>
-                )}
 
                 {/* Status banner when generated or loaded */}
                 {sandboxGeneratedMsg && (
@@ -1335,7 +1302,7 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
                   ) : (
                     <iframe
                       key={`preview-code-${previewKey}`}
-                      srcDoc={codeSafety?.isValid ? codeSafety.preparedCode : `<!DOCTYPE html><html><body style="background:#090d16;color:#f87171;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;padding:24px;text-align:center;"><div style="font-size:32px;margin-bottom:8px;">🛡️</div><h3 style="margin:0 0 6px;font-size:15px;color:#fca5a5;">Preview Paused by Crash Shield</h3><p style="margin:0 0 10px;font-size:11px;color:#94a3b8;max-width:320px;">Execution is paused to protect your browser from freezing. Fix the hazardous loop or pattern in the editor to re-enable live testing.</p><div style="background:#1e293b;padding:8px 12px;border-radius:8px;font-family:monospace;font-size:11px;color:#fda4af;">${escapeHtml(codeSafety?.errors[0] || 'Crash hazard')}</div></body></html>`}
+                      srcDoc={codeSafety?.preparedCode || gameCode}
                       title="Code Preview"
                       className="w-full h-full border-none"
                       sandbox="allow-scripts allow-modals allow-pointer-lock"

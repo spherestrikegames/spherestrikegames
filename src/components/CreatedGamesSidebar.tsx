@@ -123,12 +123,7 @@ export const CreatedGamesSidebar: React.FC<CreatedGamesSidebarProps> = ({
       let finalCode = gameCode || selectedGame.code;
       if (gameCode && !embedUrl.trim()) {
         const safety = validateGameCode(gameCode);
-        if (!safety.isValid) {
-          setErrorMsg('Crash Shield Blocked: ' + safety.errors.join('; '));
-          setIsSaving(false);
-          return;
-        }
-        finalCode = safety.preparedCode;
+        finalCode = safety.preparedCode || gameCode;
       }
 
       const updatedPayload = {

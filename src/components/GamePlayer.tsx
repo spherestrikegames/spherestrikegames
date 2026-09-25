@@ -338,7 +338,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 <iframe
                   ref={iframeRef}
                   key={selectedVersion}
-                  srcDoc={injectCrashProtection(activeCode)}
+                  srcDoc={activeCode}
                   title={game.title}
                   sandbox="allow-scripts allow-modals allow-pointer-lock allow-forms allow-fullscreen allow-orientation-lock"
                   className="w-full h-full border-0 block"
