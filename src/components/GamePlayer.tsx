@@ -74,30 +74,22 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   const iframeContainerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  // Reload progress if currentUser changes and sync last played game to cloud profile
+  // Reload progress and sync played game
   useEffect(() => {
-    if (currentUser) {
-      setProgress(getUserGameProgress(currentUser.id, game.id));
-      if (!newCommentAuthor) setNewCommentAuthor(currentUser.username);
-      // Persist last played game so when returning to login, user gets right back to where they left off
-      saveAccountDataApi(currentUser.id, {
-        lastPlayedGameId: game.id,
-        lastPlayedGameTitle: game.title,
-        lastActiveView: 'player'
-      }).catch(() => {});
-    } else {
-      setProgress(null);
+    setProgress(getUserGameProgress(currentUser?.id, game.id));
+    if (currentUser && !newCommentAuthor) {
+      setNewCommentAuthor(currentUser.username);
     }
   }, [currentUser?.id, game.id]);
 
-  // Track session playtime and auto-save for logged in users
+  // Track session playtime and auto-save for all players
   useEffect(() => {
     const timer = setInterval(() => {
       setSessionSeconds(s => {
         const next = s + 5;
-        if (currentUser && next % 15 === 0) {
-          recordGameSessionPlay(currentUser.id, game.id, game.title, 15);
-          setProgress(getUserGameProgress(currentUser.id, game.id));
+        if (next % 15 === 0) {
+          recordGameSessionPlay(currentUser?.id, game.id, game.title, 15);
+          setProgress(getUserGameProgress(currentUser?.id, game.id));
         }
         return next;
       });
@@ -112,14 +104,10 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       if (event.data && typeof event.data === 'object') {
         const scoreVal = Number(event.data.score ?? event.data.finalScore ?? event.data.points);
         if (!isNaN(scoreVal) && scoreVal > 0) {
-          if (currentUser) {
-            const res = recordHighScore(currentUser.id, game.id, game.title, scoreVal);
-            setProgress(res.progress);
-            setSaveToast(res.isNewBest ? `🏆 New Personal Record: ${scoreVal.toLocaleString()} pts!` : `Score saved: ${scoreVal.toLocaleString()} pts`);
-            setTimeout(() => setSaveToast(''), 3500);
-          } else {
-            setGuestSessionProgress(game.id, { highScore: scoreVal, gameTitle: game.title });
-          }
+          const res = recordHighScore(currentUser?.id, game.id, game.title, scoreVal);
+          setProgress(res.progress);
+          setSaveToast(res.isNewBest ? `🏆 New Personal Record: ${scoreVal.toLocaleString()} pts!` : `Score saved: ${scoreVal.toLocaleString()} pts`);
+          setTimeout(() => setSaveToast(''), 3500);
         }
       }
     };
@@ -132,19 +120,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     const scoreVal = Number(inputScore) || 0;
     const levelVal = Number(inputLevel) || 1;
 
-    if (!currentUser) {
-      setGuestSessionProgress(game.id, {
-        highScore: scoreVal,
-        levelReached: levelVal,
-        checkpoints: inputCheckpoint.trim() || undefined,
-        gameTitle: game.title
-      });
-      setIsScoreModalOpen(false);
-      onOpenLogin?.();
-      return;
-    }
-
-    const updated = saveUserGameProgress(currentUser.id, game.id, game.title, {
+    const updated = saveUserGameProgress(currentUser?.id, game.id, game.title, {
       highScore: Math.max(progress?.highScore || 0, scoreVal),
       levelReached: levelVal,
       checkpoints: inputCheckpoint.trim() || progress?.checkpoints || undefined
@@ -154,7 +130,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     setIsScoreModalOpen(false);
     setInputScore('');
     setInputCheckpoint('');
-    setSaveToast('Progress saved to your cloud account!');
+    setSaveToast('Progress & checkpoint saved!');
     setTimeout(() => setSaveToast(''), 3500);
   };
 
@@ -560,7 +536,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                     className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-950 transition-all flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <Save className="w-3.5 h-3.5" />
-                    <span>{currentUser ? 'Save to Cloud Profile' : 'Save & Log In'}</span>
+                    <span>Save Progress & Checkpoint</span>
                   </button>
                 </form>
               </div>

@@ -37,11 +37,17 @@ const DEFAULT_ACHIEVEMENTS: ArcadeAchievement[] = [
   }
 ];
 
-function getUserProgressKey(userId: string): string {
-  return `${PROGRESS_STORAGE_PREFIX}${userId}`;
+export const LOCAL_PLAYER_ID = 'local_player';
+
+export function getEffectivePlayerId(userId?: string | null): string {
+  return userId && String(userId).trim() ? userId : LOCAL_PLAYER_ID;
 }
 
-export function getAllUserProgress(userId: string): GameProgress[] {
+function getUserProgressKey(userId?: string | null): string {
+  return `${PROGRESS_STORAGE_PREFIX}${getEffectivePlayerId(userId)}`;
+}
+
+export function getAllUserProgress(userId?: string | null): GameProgress[] {
   try {
     const raw = localStorage.getItem(getUserProgressKey(userId));
     if (!raw) return [];
@@ -56,18 +62,20 @@ export function getAllUserProgress(userId: string): GameProgress[] {
   }
 }
 
-export function getUserGameProgress(userId: string, gameId: string): GameProgress | null {
+export function getUserGameProgress(userId?: string | null, gameId?: string): GameProgress | null {
+  if (!gameId) return null;
   const all = getAllUserProgress(userId);
   return all.find(p => p.gameId === gameId) || null;
 }
 
 export function saveUserGameProgress(
-  userId: string,
+  userId: string | null | undefined,
   gameId: string,
   gameTitle: string,
   updates: Partial<GameProgress>
 ): GameProgress {
-  const all = getAllUserProgress(userId);
+  const effectiveId = getEffectivePlayerId(userId);
+  const all = getAllUserProgress(effectiveId);
   const existingIdx = all.findIndex(p => p.gameId === gameId);
   const now = new Date().toISOString();
 
@@ -97,29 +105,31 @@ export function saveUserGameProgress(
   }
 
   try {
-    localStorage.setItem(getUserProgressKey(userId), JSON.stringify(all));
+    localStorage.setItem(getUserProgressKey(effectiveId), JSON.stringify(all));
 
-    // Also sync to server account cloud database
-    fetch('/api/auth/save-data', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId,
-        lastPlayedGameId: gameId,
-        lastPlayedGameTitle: target.gameTitle,
-        highScores: updates.highScore !== undefined ? { [gameId]: updates.highScore } : undefined,
-        savedProgress: {
-          [gameId]: {
-            levelReached: target.levelReached,
-            highScore: target.highScore,
-            totalPlayTimeSeconds: target.totalPlayTimeSeconds,
-            checkpoints: target.checkpoints,
-            savedData: target.savedData,
-            lastPlayedAt: now
+    // Also sync to server account cloud database if authenticated
+    if (userId && effectiveId !== LOCAL_PLAYER_ID) {
+      fetch('/api/auth/save-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: effectiveId,
+          lastPlayedGameId: gameId,
+          lastPlayedGameTitle: target.gameTitle,
+          highScores: updates.highScore !== undefined ? { [gameId]: updates.highScore } : undefined,
+          savedProgress: {
+            [gameId]: {
+              levelReached: target.levelReached,
+              highScore: target.highScore,
+              totalPlayTimeSeconds: target.totalPlayTimeSeconds,
+              checkpoints: target.checkpoints,
+              savedData: target.savedData,
+              lastPlayedAt: now
+            }
           }
-        }
-      })
-    }).catch(() => {});
+        })
+      }).catch(() => {});
+    }
   } catch (err) {
     console.error('Failed to save progress to localStorage:', err);
   }
@@ -128,7 +138,7 @@ export function saveUserGameProgress(
 }
 
 export function recordGameSessionPlay(
-  userId: string,
+  userId: string | null | undefined,
   gameId: string,
   gameTitle: string,
   additionalSeconds: number
@@ -144,7 +154,7 @@ export function recordGameSessionPlay(
 }
 
 export function recordHighScore(
-  userId: string,
+  userId: string | null | undefined,
   gameId: string,
   gameTitle: string,
   score: number
@@ -223,7 +233,7 @@ export function migrateGuestProgressToUser(userId: string): number {
   }
 }
 
-export function calculateUserArcadeStats(userId: string): UserArcadeStats {
+export function calculateUserArcadeStats(userId?: string | null): UserArcadeStats {
   const allProgress = getAllUserProgress(userId);
 
   const totalPlayTimeSeconds = allProgress.reduce((acc, curr) => acc + (curr.totalPlayTimeSeconds || 0), 0);

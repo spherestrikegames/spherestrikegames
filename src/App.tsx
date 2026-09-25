@@ -7,20 +7,15 @@ import { EmptySlotCard } from './components/EmptySlotCard';
 import { GamePlayer } from './components/GamePlayer';
 import { GameUploader } from './components/GameUploader';
 import { CreatedGamesSidebar } from './components/CreatedGamesSidebar';
-import { AuthModal } from './components/AuthModal';
 import { AdminSecretTerminal } from './components/AdminSecretTerminal';
-import { UserProfileModal } from './components/UserProfileModal';
 import { SphereStrikeLogo } from './components/SphereStrikeLogo';
 import { Game, GameGenre } from './types/game';
-import { User, AuthMode } from './types/user';
-import { fetchAllGames, deleteGame, checkAccountStatus, saveAccountDataApi } from './utils/api';
+import { fetchAllGames, deleteGame } from './utils/api';
 import { isUserCreatedGame, removeMyCreatedGameId } from './utils/myGames';
-import { getCurrentUser, logoutUser } from './utils/auth';
-import { hydrateUserProgressFromServer } from './utils/progress';
 import { 
   Sparkles, Flame, History, SearchX, Plus, RefreshCw, 
   Gamepad2, Heart, Award, ArrowRight, ChevronRight, Edit3, Grid3X3,
-  Ban, ShieldAlert
+  ShieldAlert
 } from 'lucide-react';
 
 const MAIN_SCREEN_TOTAL_SLOTS = 65;
@@ -36,118 +31,12 @@ export default function App() {
   // Side mode: My Created Games (View and Edit Info)
   const [isCreatedGamesOpen, setIsCreatedGamesOpen] = useState<boolean>(false);
 
-  // User Authentication State
-  const [currentUser, setCurrentUser] = useState<User | null>(() => getCurrentUser());
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
-  const [authMode, setAuthMode] = useState<AuthMode>('login');
-  const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
-  const [blockedNotice, setBlockedNotice] = useState<string | null>(null);
-
-  // Monitor if active user session was blocked by administrator
-  useEffect(() => {
-    if (!currentUser) return;
-    const verifyStatus = async () => {
-      try {
-        const res = await checkAccountStatus(currentUser.id);
-        if (res.blocked) {
-          setBlockedNotice(
-            res.blockedReason || 'This account has been suspended by an administrator due to reported suspicious behavior.'
-          );
-          logoutUser();
-          setCurrentUser(null);
-        }
-      } catch (err) {
-        console.warn('Failed to verify user status:', err);
-      }
-    };
-
-    verifyStatus();
-    const interval = setInterval(verifyStatus, 20000);
-    return () => clearInterval(interval);
-  }, [currentUser?.id]);
-
-  const handleOpenLogin = () => {
-    setAuthMode('login');
-    setIsAuthModalOpen(true);
-  };
-
-  const handleOpenSignup = () => {
-    setAuthMode('signup');
-    setIsAuthModalOpen(true);
-  };
-
-  const handleOpenProfile = () => {
-    setIsProfileModalOpen(true);
-  };
-
-  const handleLogout = () => {
-    // Save last played state before logging out so account keeps where you left off
-    if (currentUser) {
-      saveAccountDataApi(currentUser.id, {
-        favoriteGameIds: favoriteIds,
-        lastPlayedGameId: selectedGame?.id,
-        lastPlayedGameTitle: selectedGame?.title,
-        lastActiveView: currentView
-      }).catch(() => {});
-    }
-    logoutUser();
-    setCurrentUser(null);
-    setCurrentView('arcade');
-    setSelectedGame(null);
-  };
-
-  const handleAuthSuccess = (user: User) => {
-    try {
-      setCurrentUser(user);
-      if (user.isAdmin || user.role === 'admin') {
-        setIsAdminUnlocked(true);
-        localStorage.setItem('spherestrike_admin_unlocked', 'true');
-      }
-    } catch (e) {
-      console.warn('setCurrentUser state error:', e);
-    }
-
-    try {
-      hydrateUserProgressFromServer(user);
-    } catch (e) {
-      console.warn('Hydration skipped:', e);
-    }
-
-    // Restore favorites from user account
-    try {
-      if (Array.isArray(user.favoriteGameIds) && user.favoriteGameIds.length > 0) {
-        setFavoriteIds(user.favoriteGameIds);
-        localStorage.setItem('spherestrike_favs', JSON.stringify(user.favoriteGameIds));
-      }
-    } catch (e) {
-      console.warn('Favorite storage error:', e);
-    }
-
-    // Restore exact account state where user left off
-    try {
-      if (user.lastPlayedGameId) {
-        const match = games.find(g => g.id === user.lastPlayedGameId || g.slug === user.lastPlayedGameId);
-        if (match) {
-          setSelectedGame(match);
-          if (user.lastActiveView === 'player' || !user.lastActiveView) {
-            setCurrentView('player');
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('Last played sync error:', e);
-    }
-  };
-
+  // Admin clearance state (authenticated via secret passkey)
   const [isAdminUnlocked, setIsAdminUnlocked] = useState<boolean>(() => {
     return localStorage.getItem('spherestrike_admin_unlocked') === 'true';
   });
 
-  // Server-authenticated Admin or passkey-unlocked clearance:
-  const isAdmin = Boolean(
-    (currentUser && currentUser.isAdmin === true && currentUser.role === 'admin' && !currentUser.isBlocked) ||
-    isAdminUnlocked
-  );
+  const isAdmin = Boolean(isAdminUnlocked);
 
   const handleUnlockAdmin = () => {
     setIsAdminUnlocked(true);
@@ -158,29 +47,7 @@ export default function App() {
     setIsAdminUnlocked(false);
     localStorage.removeItem('spherestrike_admin_unlocked');
     localStorage.removeItem('spherestrike_admin_passkey');
-    if (currentUser?.isAdmin) {
-      handleLogout();
-    }
   };
-
-  // Restore state when user is loaded on initial startup
-  useEffect(() => {
-    if (currentUser) {
-      hydrateUserProgressFromServer(currentUser);
-      if (Array.isArray(currentUser.favoriteGameIds) && currentUser.favoriteGameIds.length > 0) {
-        setFavoriteIds(currentUser.favoriteGameIds);
-      }
-      if (currentUser.lastPlayedGameId && !selectedGame && games.length > 0) {
-        const match = games.find(g => g.id === currentUser.lastPlayedGameId || g.slug === currentUser.lastPlayedGameId);
-        if (match) {
-          setSelectedGame(match);
-          if (currentUser.lastActiveView === 'player') {
-            setCurrentView('player');
-          }
-        }
-      }
-    }
-  }, [currentUser?.id, games.length]);
 
   // Filters
   const [activeGenre, setActiveGenre] = useState<GameGenre>('All');
@@ -202,9 +69,6 @@ export default function App() {
     setFavoriteIds(prev => {
       const next = prev.includes(gameId) ? prev.filter(id => id !== gameId) : [...prev, gameId];
       localStorage.setItem('spherestrike_favs', JSON.stringify(next));
-      if (currentUser) {
-        saveAccountDataApi(currentUser.id, { favoriteGameIds: next }).catch(() => {});
-      }
       return next;
     });
   };
@@ -325,22 +189,12 @@ export default function App() {
   };
 
   const handleUpdateGame = (game: Game) => {
-    if (!currentUser && !isAdmin) {
-      setAuthMode('login');
-      setIsAuthModalOpen(true);
-      return;
-    }
     setGameToUpdate(game);
     setCurrentView('studio');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleOpenUpload = () => {
-    if (!currentUser) {
-      setAuthMode('login');
-      setIsAuthModalOpen(true);
-      return;
-    }
     setGameToUpdate(null);
     setCurrentView('studio');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -395,11 +249,6 @@ export default function App() {
         onToggle={() => setSidebarOpen(!sidebarOpen)}
         currentView={currentView}
         onNavigate={(view) => {
-          if (view === 'studio' && !currentUser) {
-            setAuthMode('login');
-            setIsAuthModalOpen(true);
-            return;
-          }
           setCurrentView(view as any);
           if (view !== 'player') setSelectedGame(null);
           window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -416,16 +265,6 @@ export default function App() {
         favoritesCount={favoriteIds.length}
         myCreatedGamesCount={myCreatedGames.length}
         isAdmin={isAdmin}
-        currentUser={currentUser}
-        onOpenLogin={() => {
-          setAuthMode('login');
-          setIsAuthModalOpen(true);
-        }}
-        onOpenSignup={() => {
-          setAuthMode('signup');
-          setIsAuthModalOpen(true);
-        }}
-        onLogout={handleLogout}
         onOpenAdminTerminal={() => {
           setCurrentView('admin');
           setSelectedGame(null);
@@ -449,12 +288,7 @@ export default function App() {
           }}
           onToggleCreatedGames={() => setIsCreatedGamesOpen(!isCreatedGamesOpen)}
           myCreatedGamesCount={myCreatedGames.length}
-          currentUser={currentUser}
           isAdmin={isAdmin}
-          onOpenLogin={handleOpenLogin}
-          onOpenSignup={handleOpenSignup}
-          onLogout={handleLogout}
-          onOpenProfile={handleOpenProfile}
         />
 
         {/* Primary Page Canvas */}
@@ -472,8 +306,6 @@ export default function App() {
               allGames={games}
               onDeleteGame={handleDeleteGame}
               isAdmin={isAdmin}
-              currentUser={currentUser}
-              onOpenLogin={handleOpenLogin}
             />
           )}
 
@@ -486,12 +318,7 @@ export default function App() {
               }}
               onGameSaved={handleGameSaved}
               initialGameToUpdate={gameToUpdate}
-              currentUser={currentUser}
               isAdmin={isAdmin}
-              onRequireAuth={() => {
-                setAuthMode('login');
-                setIsAuthModalOpen(true);
-              }}
             />
           )}
 
@@ -549,77 +376,6 @@ export default function App() {
                 onSortChange={setSortBy}
                 totalGamesCount={filteredGames.length}
               />
-
-              {/* Guest Account Invitation Banner */}
-              {!currentUser && (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-blue-950/50 via-indigo-950/40 to-slate-900/60 border border-blue-500/25 shadow-lg shadow-blue-950/30">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-blue-600/30 border border-blue-400/40 flex items-center justify-center text-blue-400 shrink-0">
-                      <Sparkles className="w-5 h-5 text-blue-400" />
-                    </div>
-                    <div>
-                      <p className="font-bold text-white text-xs sm:text-sm">Join Sphere Strike Arcade</p>
-                      <p className="text-[11px] text-slate-300">Create your free player account to save game checkpoints, high scores & publish games.</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
-                    <button
-                      onClick={() => {
-                        setAuthMode('login');
-                        setIsAuthModalOpen(true);
-                      }}
-                      className="px-3.5 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-slate-200 text-xs font-semibold transition-all cursor-pointer"
-                    >
-                      Log In
-                    </button>
-                    <button
-                      onClick={() => {
-                        setAuthMode('signup');
-                        setIsAuthModalOpen(true);
-                      }}
-                      className="px-4 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md shadow-blue-950 transition-all cursor-pointer"
-                    >
-                      Create Free Account
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Logged-In User "Pick Up Where You Left Off" Banner */}
-              {currentUser && currentUser.lastPlayedGameId && (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-emerald-950/40 via-cyan-950/30 to-slate-900/60 border border-emerald-500/30 shadow-lg shadow-emerald-950/20 animate-in fade-in">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400 shrink-0">
-                      <Gamepad2 className="w-5 h-5 text-emerald-400" />
-                    </div>
-                    <div>
-                      <p className="font-bold text-white text-xs sm:text-sm flex items-center gap-2">
-                        <span>Pick up where you left off</span>
-                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                          Saved Session
-                        </span>
-                      </p>
-                      <p className="text-[11px] text-slate-300">
-                        Continue playing <span className="text-emerald-300 font-semibold">{currentUser.lastPlayedGameTitle || 'your game'}</span> with your saved progress and checkpoints.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
-                    <button
-                      onClick={() => {
-                        const target = games.find(g => g.id === currentUser.lastPlayedGameId || g.slug === currentUser.lastPlayedGameId);
-                        if (target) {
-                          handleSelectGame(target);
-                        }
-                      }}
-                      className="px-4 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold shadow-md shadow-emerald-950/50 transition-all cursor-pointer flex items-center gap-1.5"
-                    >
-                      <Gamepad2 className="w-3.5 h-3.5" />
-                      <span>Resume Game</span>
-                    </button>
-                  </div>
-                </div>
-              )}
 
               {/* 65 EQUAL SIZE SLOTS GRID (NO SPOTLIGHT GAMES - ALL SAME SIZE) */}
               <section className="space-y-4">
@@ -743,56 +499,6 @@ export default function App() {
           onGameUpdated={handleGameUpdatedFromSide}
           onGameDeleted={handleDeleteGame}
         />
-
-        {/* User Login & Signup Modal */}
-        <AuthModal
-          isOpen={isAuthModalOpen}
-          initialMode={authMode}
-          onClose={() => setIsAuthModalOpen(false)}
-          onSuccess={handleAuthSuccess}
-        />
-
-        {/* User Profile & Saved Progress Modal */}
-        <UserProfileModal
-          isOpen={isProfileModalOpen}
-          onClose={() => setIsProfileModalOpen(false)}
-          currentUser={currentUser}
-          allGames={games}
-          onSelectGame={(game) => {
-            handleSelectGame(game);
-          }}
-          onLogout={handleLogout}
-        />
-
-        {/* Account Suspended Alert Modal */}
-        {blockedNotice && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
-            <div className="relative w-full max-w-md bg-[#12080c] border border-rose-500/50 rounded-3xl p-6 sm:p-7 shadow-2xl shadow-rose-950/80 text-center space-y-4">
-              <div className="w-14 h-14 rounded-2xl bg-rose-950/90 border border-rose-500/50 flex items-center justify-center text-rose-400 mx-auto shadow-lg shadow-rose-950">
-                <Ban className="w-8 h-8" />
-              </div>
-
-              <div>
-                <h3 className="text-xl font-black text-white font-['Outfit'] tracking-tight">
-                  Account Suspended
-                </h3>
-                <p className="text-xs text-rose-300/90 mt-2 leading-relaxed">
-                  {blockedNotice}
-                </p>
-              </div>
-
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={() => setBlockedNotice(null)}
-                  className="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-[0.98] text-white text-xs sm:text-sm font-bold shadow-lg shadow-rose-950 transition-all cursor-pointer"
-                >
-                  Acknowledge & Close
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Footer */}
         <footer className="mt-16 border-t border-white/[0.08] bg-[#090d16] py-8 text-xs text-slate-400">

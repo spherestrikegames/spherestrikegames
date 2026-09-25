@@ -17,7 +17,7 @@ interface GameUploaderProps {
   onClose: () => void;
   onGameSaved: (game: Game) => void;
   initialGameToUpdate?: Game | null;
-  currentUser: User | null;
+  currentUser?: User | null;
   isAdmin?: boolean;
   onRequireAuth?: () => void;
 }
@@ -545,39 +545,6 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
       setIsSubmitting(false);
     }
   };
-
-  if (!currentUser && (!isUpdating || !isAdmin)) {
-    return (
-      <div className="max-w-md mx-auto my-12 p-8 rounded-3xl bg-[#0e1422] border border-white/[0.1] text-center shadow-2xl space-y-5 animate-in fade-in">
-        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white mx-auto shadow-lg shadow-blue-950">
-          <Lock className="w-7 h-7" />
-        </div>
-        <div className="space-y-1">
-          <h2 className="text-xl font-bold text-white font-['Outfit']">Log In Required to Upload Games</h2>
-          <p className="text-xs text-slate-400">
-            You cannot upload or publish games unless you are logged in. Please log in or create a gamer account to continue.
-          </p>
-        </div>
-        <div className="flex flex-col gap-2.5 pt-2">
-          <button
-            type="button"
-            onClick={() => onRequireAuth?.()}
-            className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md shadow-blue-950 flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <LogIn className="w-4 h-4" />
-            <span>Log In or Sign Up to Continue</span>
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-full py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white border border-white/[0.08] font-semibold text-xs transition-colors cursor-pointer"
-          >
-            Back to Arcade
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6">
