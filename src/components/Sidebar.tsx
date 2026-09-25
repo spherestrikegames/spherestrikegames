@@ -2,7 +2,7 @@ import React from 'react';
 import { 
   Home, Flame, History, Heart, Upload, Code2, 
   Gamepad2, Rocket, Target, Boxes, Compass, Smile, Trophy, Tv, Users, GraduationCap,
-  ChevronLeft, ChevronRight, Edit3, Sparkles, ShieldCheck, Shield, User as UserIcon, UserPlus, LogIn, LogOut
+  ChevronLeft, ChevronRight, Edit3, Sparkles, ShieldCheck, Shield, ShieldAlert, User as UserIcon, UserPlus, LogIn, LogOut
 } from 'lucide-react';
 import { GameGenre } from '../types/game';
 import { User } from '../types/user';
@@ -247,29 +247,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
               );
             })}
 
-            {/* Admin Moderation Tab - Only visible to admin accounts */}
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={() => onNavigate('admin')}
-                title="Admin Moderation & Security Monitor"
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer mt-1 ${
-                  currentView === 'admin'
-                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-950/60 border border-emerald-400/50'
-                    : 'bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-300 hover:text-emerald-100 border border-emerald-500/30'
-                }`}
-              >
-                <ShieldCheck className={`w-4 h-4 shrink-0 ${currentView === 'admin' ? 'text-white' : 'text-emerald-400 animate-pulse'}`} />
-                {isOpen && (
-                  <div className="flex items-center justify-between flex-1 overflow-hidden">
-                    <span className="truncate">Admin Moderation</span>
-                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold uppercase">
-                      Admin
-                    </span>
-                  </div>
-                )}
-              </button>
-            )}
+            {/* Admin Panel in Categories section */}
+            <button
+              type="button"
+              onClick={() => onNavigate('admin')}
+              title={isAdmin ? "Admin Moderation & Security Monitor (Unlocked)" : "Open Admin Panel & Moderation Clearance"}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer mt-1 ${
+                currentView === 'admin'
+                  ? 'bg-gradient-to-r from-amber-600 to-rose-600 text-white shadow-md shadow-amber-950/60 border border-amber-400/50'
+                  : isAdmin
+                    ? 'bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-300 hover:text-emerald-100 border border-emerald-500/30'
+                    : 'bg-amber-950/20 hover:bg-amber-950/40 text-amber-300 hover:text-amber-100 border border-amber-500/30'
+              }`}
+            >
+              {isAdmin ? (
+                <ShieldCheck className={`w-4 h-4 shrink-0 ${currentView === 'admin' ? 'text-white' : 'text-emerald-400'}`} />
+              ) : (
+                <ShieldAlert className={`w-4 h-4 shrink-0 ${currentView === 'admin' ? 'text-white' : 'text-amber-400'}`} />
+              )}
+              {isOpen && (
+                <div className="flex items-center justify-between flex-1 overflow-hidden">
+                  <span className="truncate">Admin Panel</span>
+                  <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded font-bold uppercase ${
+                    isAdmin 
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' 
+                      : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                  }`}>
+                    {isAdmin ? 'Active' : 'Passkey'}
+                  </span>
+                </div>
+              )}
+            </button>
           </div>
 
           {/* Creator Tools Section */}

@@ -8,6 +8,7 @@ import { GamePlayer } from './components/GamePlayer';
 import { GameUploader } from './components/GameUploader';
 import { CreatedGamesSidebar } from './components/CreatedGamesSidebar';
 import { AdminSecretTerminal } from './components/AdminSecretTerminal';
+import { AdminPasswordModal } from './components/AdminPasswordModal';
 import { SphereStrikeLogo } from './components/SphereStrikeLogo';
 import { Game, GameGenre } from './types/game';
 import { fetchAllGames, deleteGame } from './utils/api';
@@ -35,6 +36,7 @@ export default function App() {
   const [isAdminUnlocked, setIsAdminUnlocked] = useState<boolean>(() => {
     return localStorage.getItem('spherestrike_admin_unlocked') === 'true';
   });
+  const [isAdminPasswordModalOpen, setIsAdminPasswordModalOpen] = useState<boolean>(false);
 
   const isAdmin = Boolean(isAdminUnlocked);
 
@@ -47,6 +49,16 @@ export default function App() {
     setIsAdminUnlocked(false);
     localStorage.removeItem('spherestrike_admin_unlocked');
     localStorage.removeItem('spherestrike_admin_passkey');
+  };
+
+  const handleRequestAdminAccess = () => {
+    if (isAdmin) {
+      setCurrentView('admin');
+      setSelectedGame(null);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      setIsAdminPasswordModalOpen(true);
+    }
   };
 
   // Filters
@@ -249,6 +261,10 @@ export default function App() {
         onToggle={() => setSidebarOpen(!sidebarOpen)}
         currentView={currentView}
         onNavigate={(view) => {
+          if (view === 'admin') {
+            handleRequestAdminAccess();
+            return;
+          }
           setCurrentView(view as any);
           if (view !== 'player') setSelectedGame(null);
           window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -265,11 +281,7 @@ export default function App() {
         favoritesCount={favoriteIds.length}
         myCreatedGamesCount={myCreatedGames.length}
         isAdmin={isAdmin}
-        onOpenAdminTerminal={() => {
-          setCurrentView('admin');
-          setSelectedGame(null);
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }}
+        onOpenAdminTerminal={handleRequestAdminAccess}
       />
 
       {/* Main Content Area - shifts with sidebar on desktop */}
@@ -375,6 +387,9 @@ export default function App() {
                 sortBy={sortBy}
                 onSortChange={setSortBy}
                 totalGamesCount={filteredGames.length}
+                isAdmin={isAdmin}
+                currentView={currentView}
+                onOpenAdmin={handleRequestAdminAccess}
               />
 
               {/* 65 EQUAL SIZE SLOTS GRID (NO SPOTLIGHT GAMES - ALL SAME SIZE) */}
@@ -463,25 +478,47 @@ export default function App() {
                 />
               </div>
             ) : (
-              <div className="p-12 rounded-3xl bg-[#0f1422] border border-rose-500/30 text-center space-y-4 max-w-xl mx-auto">
-                <ShieldAlert className="w-12 h-12 text-rose-400 mx-auto" />
+              <div className="p-12 rounded-3xl bg-[#0f1422] border border-amber-500/30 text-center space-y-4 max-w-xl mx-auto shadow-2xl shadow-amber-950/40">
+                <ShieldAlert className="w-12 h-12 text-amber-400 mx-auto" />
                 <h3 className="text-xl font-black text-white font-['Outfit']">
                   Restricted Administrator Area
                 </h3>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  This moderation section is only accessible to verified administrator accounts.
+                  This moderation section is protected. Enter the administrator password to unlock security audits and arcade moderation.
                 </p>
-                <button
-                  type="button"
-                  onClick={() => setCurrentView('arcade')}
-                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all cursor-pointer shadow-lg shadow-blue-950"
-                >
-                  Return to Arcade
-                </button>
+                <div className="flex items-center justify-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentView('arcade')}
+                    className="px-4 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 text-xs font-semibold transition-all cursor-pointer"
+                  >
+                    Return to Arcade
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsAdminPasswordModalOpen(true)}
+                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-rose-600 hover:from-amber-400 hover:to-rose-500 text-white text-xs font-bold transition-all cursor-pointer shadow-lg shadow-amber-950"
+                  >
+                    Enter Admin Password
+                  </button>
+                </div>
               </div>
             )
           )}
         </main>
+
+        {/* Admin Password Modal Prompt */}
+        <AdminPasswordModal
+          isOpen={isAdminPasswordModalOpen}
+          onClose={() => setIsAdminPasswordModalOpen(false)}
+          onSuccess={() => {
+            setIsAdminPasswordModalOpen(false);
+            handleUnlockAdmin();
+            setCurrentView('admin');
+            setSelectedGame(null);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+        />
 
         {/* Side Mode: My Created Games (View & Edit Info) */}
         <CreatedGamesSidebar

@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   Gamepad2, Target, Rocket, Boxes, Compass, Smile, Trophy, Tv, Users, GraduationCap,
-  SlidersHorizontal, ChevronDown, Flame, Sparkles
+  SlidersHorizontal, ChevronDown, Flame, Sparkles, ShieldCheck, ShieldAlert
 } from 'lucide-react';
 import { GameGenre } from '../types/game';
 
@@ -11,6 +11,9 @@ interface CategoryBarProps {
   sortBy: 'trending' | 'plays' | 'rating' | 'updated' | 'newest';
   onSortChange: (sort: 'trending' | 'plays' | 'rating' | 'updated' | 'newest') => void;
   totalGamesCount: number;
+  isAdmin?: boolean;
+  onOpenAdmin?: () => void;
+  currentView?: string;
 }
 
 const CATEGORIES: { id: GameGenre; label: string; icon: React.ReactNode }[] = [
@@ -33,7 +36,12 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
   sortBy,
   onSortChange,
   totalGamesCount,
+  isAdmin = false,
+  onOpenAdmin,
+  currentView,
 }) => {
+  const isAdminViewActive = currentView === 'admin';
+
   return (
     <div className="w-full space-y-3">
       {/* Category Pills Row + Sort Dropdown */}
@@ -41,7 +49,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
         {/* Scrollable Category Pills */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 scrollbar-thin scrollbar-thumb-white/10 no-scrollbar">
           {CATEGORIES.map((cat) => {
-            const isActive = activeGenre === cat.id;
+            const isActive = !isAdminViewActive && activeGenre === cat.id;
             return (
               <button
                 key={cat.id}
@@ -59,6 +67,31 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
               </button>
             );
           })}
+
+          {/* Admin Panel Direct Category Pill */}
+          {onOpenAdmin && (
+            <button
+              onClick={onOpenAdmin}
+              title={isAdmin ? "Admin Moderation Terminal & Logs (Unlocked)" : "Open Admin Panel & Moderation"}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 border ${
+                isAdminViewActive
+                  ? 'bg-gradient-to-r from-amber-600 to-rose-600 text-white border-amber-400 shadow-md shadow-amber-950/60 ring-2 ring-amber-500/30'
+                  : isAdmin
+                    ? 'bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-300 border-emerald-500/40 shadow-sm'
+                    : 'bg-amber-950/30 hover:bg-amber-900/40 text-amber-300 border-amber-500/30'
+              }`}
+            >
+              {isAdmin ? (
+                <ShieldCheck className={`w-3.5 h-3.5 ${isAdminViewActive ? 'text-white' : 'text-emerald-400'}`} />
+              ) : (
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+              )}
+              <span>Admin Panel</span>
+              {isAdmin && (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse ml-0.5" />
+              )}
+            </button>
+          )}
         </div>
 
         {/* Sort Controls */}
