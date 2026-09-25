@@ -2,20 +2,21 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   ShieldAlert, ShieldCheck, Lock, Unlock, RefreshCw, Sparkles, 
   Search, Filter, UserX, UserCheck, AlertTriangle, Clock, 
-  Zap, CheckCircle2, AlertOctagon, Info, Database, Download, Upload, HardDrive, Trash2
+  Zap, CheckCircle2, AlertOctagon, Info, Database, Download, Upload, HardDrive, Trash2,
+  UserPlus, X
 } from 'lucide-react';
 import { User } from '../types/user';
 import { AiAuditReport } from '../types/admin';
 import { 
   fetchAllUsers, blockUserAccount, unblockUserAccount, unblockAllUserAccounts,
   triggerAiSecurityAudit, fetchAiAuditStatus, exportAccountsBackupApi, importAccountsBackupApi,
-  deleteUserAccountApi 
+  deleteUserAccountApi, resetAllAccountsApi, registerAccountWithAiApi
 } from '../utils/api';
 
 export const AdminAccountMonitor: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [auditReport, setAuditReport] = useState<AiAuditReport | null>(null);
-  const [nextScheduledAt, setNextScheduledAt] = useState<string>('');
+  const [lastAuditTime, setLastAuditTime] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isAuditing, setIsAuditing] = useState<boolean>(false);
   const [isUnblockingAll, setIsUnblockingAll] = useState<boolean>(false);
@@ -24,8 +25,16 @@ export const AdminAccountMonitor: React.FC = () => {
   const [blockingUserId, setBlockingUserId] = useState<string | null>(null);
   const [customReason, setCustomReason] = useState<string>('');
   const [actionNotice, setActionNotice] = useState<string | null>(null);
-  const [timeRemaining, setTimeRemaining] = useState<string>('60:00');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // On-demand AI account registration modal state
+  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState<boolean>(false);
+  const [regUsername, setRegUsername] = useState<string>('');
+  const [regEmail, setRegEmail] = useState<string>('');
+  const [regPassword, setRegPassword] = useState<string>('');
+  const [regRole, setRegRole] = useState<'user' | 'admin'>('user');
+  const [isRegistering, setIsRegistering] = useState<boolean>(false);
+  const [regError, setRegError] = useState<string>('');
 
   // Load users & audit report status
   const loadData = async () => {
@@ -37,7 +46,9 @@ export const AdminAccountMonitor: React.FC = () => {
       ]);
       setUsers(fetchedUsers);
       setAuditReport(auditData.report);
-      setNextScheduledAt(auditData.nextScheduledAt);
+      if (auditData.lastAuditTime) {
+        setLastAuditTime(auditData.lastAuditTime);
+      }
     } catch (err) {
       console.error('Failed to load user monitor data:', err);
     } finally {
@@ -49,25 +60,6 @@ export const AdminAccountMonitor: React.FC = () => {
     loadData();
   }, []);
 
-  // Hourly countdown timer effect
-  useEffect(() => {
-    if (!nextScheduledAt) return;
-    const interval = setInterval(() => {
-      const target = new Date(nextScheduledAt).getTime();
-      const diff = target - Date.now();
-      if (diff <= 0) {
-        setTimeRemaining('00:00 - Scan running...');
-        loadData();
-      } else {
-        const mins = Math.floor(diff / 60000);
-        const secs = Math.floor((diff % 60000) / 1000);
-        setTimeRemaining(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [nextScheduledAt]);
-
   // Trigger manual AI security audit call
   const handleRunAiAudit = async () => {
     setIsAuditing(true);
@@ -75,19 +67,56 @@ export const AdminAccountMonitor: React.FC = () => {
     try {
       const report = await triggerAiSecurityAudit();
       setAuditReport(report);
-      setNextScheduledAt(report.nextScheduledAuditAt || new Date(Date.now() + 3600000).toISOString());
+      if (report.timestamp) {
+        setLastAuditTime(report.timestamp);
+      }
       
       // Refresh users
       const updatedUsers = await fetchAllUsers();
       setUsers(updatedUsers);
       
-      setActionNotice('✨ Gemini AI Security Audit complete! All account activity analyzed.');
+      setActionNotice('✨ Gemini AI Account Identification complete! All user profiles analyzed.');
       setTimeout(() => setActionNotice(null), 5000);
     } catch (err: any) {
       console.error('AI Security Audit failed:', err);
       setActionNotice('⚠️ AI Security Audit error: ' + (err.message || 'Check server connection.'));
     } finally {
       setIsAuditing(false);
+    }
+  };
+
+  // On-demand AI account registration
+  const handleAiRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRegError('');
+    if (!regUsername.trim()) {
+      setRegError('Please enter a username or gamer tag.');
+      return;
+    }
+    setIsRegistering(true);
+    try {
+      const res = await registerAccountWithAiApi({
+        username: regUsername.trim(),
+        email: regEmail.trim() || undefined,
+        password: regPassword.trim() || undefined,
+        role: regRole
+      });
+      if (res.success) {
+        setIsRegisterModalOpen(false);
+        setRegUsername('');
+        setRegEmail('');
+        setRegPassword('');
+        setRegRole('user');
+        setActionNotice(`🤖 ${res.message} AI Identification: "${res.aiAnalysis?.riskCategory || 'Active Player'}"`);
+        setTimeout(() => setActionNotice(null), 6000);
+        await loadData();
+      } else {
+        setRegError(res.message || 'Failed to register account.');
+      }
+    } catch (err: any) {
+      setRegError(err.message || 'Error registering account with AI.');
+    } finally {
+      setIsRegistering(false);
     }
   };
 
@@ -163,6 +192,29 @@ export const AdminAccountMonitor: React.FC = () => {
         setActionNotice(`Failed to delete account @${username}.`);
         setTimeout(() => setActionNotice(null), 3500);
       }
+    }
+  };
+
+  // Reset and wipe all user accounts
+  const handleResetAllAccounts = async () => {
+    if (!window.confirm('⚠️ ARE YOU SURE YOU WANT TO RESET ALL ACCOUNTS?\n\nThis will completely wipe and reset all accounts from the database and local storage. This action cannot be undone.')) {
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const res = await resetAllAccountsApi();
+      if (res.success) {
+        setUsers([]);
+        setActionNotice(`🧹 ${res.message || 'All accounts have been reset successfully.'}`);
+        setTimeout(() => setActionNotice(null), 5000);
+      } else {
+        alert(res.message || 'Failed to reset accounts.');
+      }
+    } catch (err: any) {
+      alert('Error resetting accounts: ' + (err.message || 'Unknown error'));
+    } finally {
+      setIsLoading(false);
+      loadData();
     }
   };
 
@@ -356,50 +408,203 @@ export const AdminAccountMonitor: React.FC = () => {
             <Download className="w-3.5 h-3.5 text-blue-200" />
             <span>Download Accounts JSON</span>
           </button>
+
+          <button
+            type="button"
+            onClick={handleResetAllAccounts}
+            className="px-3.5 py-2 rounded-xl bg-rose-950/60 hover:bg-rose-900/80 active:scale-[0.98] text-rose-300 hover:text-white border border-rose-500/40 shadow-lg shadow-rose-950/40 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+            title="Reset and clear all registered accounts from database and storage"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+            <span>Reset Accounts</span>
+          </button>
         </div>
       </div>
 
-      {/* Hourly Automated AI Audit Control Banner */}
-      <div className="p-5 rounded-2xl bg-gradient-to-r from-blue-950/60 via-indigo-950/50 to-slate-900/80 border border-blue-500/30 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* On-Demand AI Account Identification & Registration Hub */}
+      <div className="p-5 rounded-2xl bg-gradient-to-r from-blue-950/70 via-indigo-950/60 to-slate-900/90 border border-blue-500/30 shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-5">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shrink-0 shadow-md shadow-blue-900">
             <Zap className="w-5 h-5" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h4 className="text-sm font-bold text-white font-['Outfit']">
-                Hourly Automated Gemini AI Security Monitor
+                On-Demand Gemini AI Account Identification Hub
               </h4>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold uppercase tracking-wider flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-                ACTIVE (Every 60m)
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 font-bold uppercase tracking-wider">
+                Click-To-Scan / On Demand
               </span>
             </div>
             <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
-              {auditReport?.summary || 'The AI engine scans all registered user profiles every 60 minutes for creation velocity floods, suspicious disposable emails, score tampering, and bot patterns.'}
+              {auditReport?.summary || 'Register new accounts with automatic AI profile identification, or trigger on-demand scans to evaluate accounts, creation patterns, and bot behaviors.'}
             </p>
             <div className="flex items-center gap-4 mt-2 text-[11px] font-mono text-slate-400">
               <span className="flex items-center gap-1 text-slate-300">
-                <Clock className="w-3.5 h-3.5 text-blue-400" />
-                Next auto scan in: <strong className="text-blue-300">{timeRemaining}</strong>
+                <Info className="w-3.5 h-3.5 text-blue-400" />
+                Hourly background scans disabled. Trigger registration or AI evaluation with the buttons on the right.
               </span>
-              {auditReport?.timestamp && (
-                <span>Last scan: {new Date(auditReport.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              {lastAuditTime && (
+                <span>Last scan: {new Date(lastAuditTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
               )}
             </div>
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleRunAiAudit}
-          disabled={isAuditing}
-          className="self-start md:self-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-[0.98] text-white text-xs font-bold shadow-lg shadow-blue-950 border border-blue-400/30 transition-all cursor-pointer flex items-center gap-2 shrink-0 disabled:opacity-50"
-        >
-          <Sparkles className={`w-4 h-4 ${isAuditing ? 'animate-spin text-amber-300' : 'text-amber-300'}`} />
-          <span>{isAuditing ? 'Analyzing Accounts...' : 'Run Instant AI Security Scan'}</span>
-        </button>
+        <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              setIsRegisterModalOpen(true);
+              setRegError('');
+            }}
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.98] text-white text-xs font-bold shadow-lg shadow-emerald-950 border border-emerald-400/30 transition-all cursor-pointer flex items-center gap-2"
+            title="Register a new user account with immediate Gemini AI profile identification"
+          >
+            <UserPlus className="w-4 h-4 text-white" />
+            <span>Register Account with AI</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleRunAiAudit}
+            disabled={isAuditing}
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-[0.98] text-white text-xs font-bold shadow-lg shadow-blue-950 border border-blue-400/30 transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50"
+          >
+            <Sparkles className={`w-4 h-4 ${isAuditing ? 'animate-spin text-amber-300' : 'text-amber-300'}`} />
+            <span>{isAuditing ? 'Identifying Accounts...' : 'Run AI Account Identification'}</span>
+          </button>
+        </div>
       </div>
+
+      {/* On-Demand AI Account Registration Modal */}
+      {isRegisterModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md bg-[#0c1322] border border-blue-500/40 rounded-3xl p-6 sm:p-7 shadow-2xl shadow-blue-950/80 space-y-5">
+            <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  <UserPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white font-['Outfit']">
+                    Register Account with AI Identification
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Creates account & runs immediate Gemini AI profile evaluation
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsRegisterModalOpen(false)}
+                className="p-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-slate-400 hover:text-white transition-all cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleAiRegisterSubmit} className="space-y-3.5">
+              {regError && (
+                <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-500/40 text-rose-300 text-xs font-semibold flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span>{regError}</span>
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+                  Gamer Tag / Username
+                </label>
+                <input
+                  type="text"
+                  value={regUsername}
+                  onChange={(e) => setRegUsername(e.target.value)}
+                  placeholder="e.g. CyberNinja, StarLord"
+                  required
+                  autoFocus
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white text-xs sm:text-sm focus:outline-none focus:border-blue-500 transition-colors font-mono"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+                  Email Address (Optional)
+                </label>
+                <input
+                  type="email"
+                  value={regEmail}
+                  onChange={(e) => setRegEmail(e.target.value)}
+                  placeholder="player@domain.com (optional)"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white text-xs sm:text-sm focus:outline-none focus:border-blue-500 transition-colors font-mono"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+                  Password (Optional)
+                </label>
+                <input
+                  type="password"
+                  value={regPassword}
+                  onChange={(e) => setRegPassword(e.target.value)}
+                  placeholder="Defaults to SpherePlayer2026 if blank"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.1] text-white text-xs sm:text-sm focus:outline-none focus:border-blue-500 transition-colors font-mono"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+                  Account Role
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRegRole('user')}
+                    className={`py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                      regRole === 'user'
+                        ? 'bg-blue-600 text-white border-blue-400/40 shadow-sm'
+                        : 'bg-white/[0.04] text-slate-400 border-white/[0.08] hover:text-white'
+                    }`}
+                  >
+                    Active Player
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRegRole('admin')}
+                    className={`py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                      regRole === 'admin'
+                        ? 'bg-emerald-600 text-white border-emerald-400/40 shadow-sm'
+                        : 'bg-white/[0.04] text-slate-400 border-white/[0.08] hover:text-white'
+                    }`}
+                  >
+                    Administrator
+                  </button>
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center gap-2">
+                <button
+                  type="submit"
+                  disabled={isRegistering}
+                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.98] text-white text-xs font-bold shadow-lg shadow-emerald-950 border border-emerald-400/30 transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <Sparkles className={`w-4 h-4 text-amber-300 ${isRegistering ? 'animate-spin' : ''}`} />
+                  <span>{isRegistering ? 'Identifying & Registering...' : 'Register & AI-Identify Account'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsRegisterModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 text-xs font-semibold transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Action Notice Alert */}
       {actionNotice && (

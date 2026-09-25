@@ -29,7 +29,7 @@ export default function App() {
   const [games, setGames] = useState<Game[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
-  const [currentView, setCurrentView] = useState<'arcade' | 'trending' | 'updated' | 'favorites' | 'studio' | 'player'>('arcade');
+  const [currentView, setCurrentView] = useState<'arcade' | 'trending' | 'updated' | 'favorites' | 'studio' | 'player' | 'admin'>('arcade');
   const [selectedGame, setSelectedGame] = useState<Game | null>(null);
   const [gameToUpdate, setGameToUpdate] = useState<Game | null>(null);
 
@@ -99,6 +99,10 @@ export default function App() {
   const handleAuthSuccess = (user: User) => {
     try {
       setCurrentUser(user);
+      if (user.isAdmin || user.role === 'admin') {
+        setIsAdminUnlocked(true);
+        localStorage.setItem('spherestrike_admin_unlocked', 'true');
+      }
     } catch (e) {
       console.warn('setCurrentUser state error:', e);
     }
@@ -135,21 +139,26 @@ export default function App() {
     }
   };
 
-  // Strictly server-authenticated Admin access:
-  // Non-admin users or guests cannot see admin abilities or use admin abilities
+  const [isAdminUnlocked, setIsAdminUnlocked] = useState<boolean>(() => {
+    return localStorage.getItem('spherestrike_admin_unlocked') === 'true';
+  });
+
+  // Server-authenticated Admin or passkey-unlocked clearance:
   const isAdmin = Boolean(
-    currentUser && 
-    currentUser.isAdmin === true && 
-    currentUser.role === 'admin' && 
-    !currentUser.isBlocked
+    (currentUser && currentUser.isAdmin === true && currentUser.role === 'admin' && !currentUser.isBlocked) ||
+    isAdminUnlocked
   );
 
   const handleUnlockAdmin = () => {
-    // Admin access is granted solely via authenticating into an admin account
+    setIsAdminUnlocked(true);
+    localStorage.setItem('spherestrike_admin_unlocked', 'true');
   };
 
   const handleLockAdmin = () => {
-    if (isAdmin) {
+    setIsAdminUnlocked(false);
+    localStorage.removeItem('spherestrike_admin_unlocked');
+    localStorage.removeItem('spherestrike_admin_passkey');
+    if (currentUser?.isAdmin) {
       handleLogout();
     }
   };
@@ -418,11 +427,9 @@ export default function App() {
         }}
         onLogout={handleLogout}
         onOpenAdminTerminal={() => {
-          if (currentView !== 'arcade') setCurrentView('arcade');
-          setTimeout(() => {
-            const el = document.getElementById('admin-terminal-section');
-            if (el) el.scrollIntoView({ behavior: 'smooth' });
-          }, 100);
+          setCurrentView('admin');
+          setSelectedGame(null);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
         }}
       />
 
@@ -685,17 +692,38 @@ export default function App() {
                   })}
                 </div>
               </section>
+            </div>
+          )}
 
-              {/* Secret Admin Moderation Terminal - strictly visible and accessible to verified admin accounts */}
-              {isAdmin && (
+          {/* VIEW: ADMIN MODERATION (Dedicated view accessible only to authenticated admins) */}
+          {currentView === 'admin' && (
+            isAdmin ? (
+              <div className="space-y-6 animate-in fade-in">
                 <AdminSecretTerminal
                   isAdmin={isAdmin}
                   onUnlockAdmin={handleUnlockAdmin}
                   onLockAdmin={handleLockAdmin}
                   totalGamesCount={games.length}
                 />
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="p-12 rounded-3xl bg-[#0f1422] border border-rose-500/30 text-center space-y-4 max-w-xl mx-auto">
+                <ShieldAlert className="w-12 h-12 text-rose-400 mx-auto" />
+                <h3 className="text-xl font-black text-white font-['Outfit']">
+                  Restricted Administrator Area
+                </h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  This moderation section is only accessible to verified administrator accounts.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setCurrentView('arcade')}
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all cursor-pointer shadow-lg shadow-blue-950"
+                >
+                  Return to Arcade
+                </button>
+              </div>
+            )
           )}
         </main>
 

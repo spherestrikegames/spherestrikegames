@@ -617,7 +617,6 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
                              isOwnerPwd || 
                              rawPasskey === 'goyal.rishi';
 
-      // If the password matches OR they verified with the admin passkey/owner tag:
       if (pwdMatch || isOwnerOrAdmin) {
         existing.lastLoginAt = now;
         if (userPassword) {
@@ -627,7 +626,10 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
           existing.isAdmin = true;
           existing.role = 'admin';
           existing.aiRiskCategory = 'Clean Verified Administrator';
-          existing.aiExplanation = 'System Administrator account. No anomalies or malicious activity detected.';
+          existing.aiExplanation = 'System Administrator account. Identified and verified.';
+        } else if (!existing.aiRiskCategory || existing.aiRiskCategory === 'New User') {
+          existing.aiRiskCategory = 'Recognized Player Account';
+          existing.aiExplanation = 'AI account identification verified regular credentials.';
         }
         saveUsers();
         const { password: _, ...sanitizedUser } = existing as any;
@@ -637,7 +639,6 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
           message: 'Account recognized! Logged in successfully.' 
         });
       } else {
-        // Name is taken by someone else with a different password
         return res.status(409).json({ 
           success: false, 
           code: 'ACCOUNT_EXISTS',
@@ -691,9 +692,133 @@ app.delete('/api/users', (req: Request, res: Response) => {
     const count = users.length;
     users = [];
     saveUsers();
-    return res.json({ success: true, message: `Successfully deleted all accounts (${count} removed).` });
+    return res.json({ success: true, message: `Successfully deleted and reset all accounts (${count} removed).`, clearedCount: count });
   } catch (err: any) {
     res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Reset all accounts endpoint (Admin only access)
+app.post('/api/admin/accounts/reset', (req: Request, res: Response) => {
+  try {
+    if (!isCallerAdmin(req)) {
+      return res.status(403).json({ success: false, message: 'Admin clearance required to reset accounts.' });
+    }
+    const count = users.length;
+    users = [];
+    saveUsers();
+    console.log(`[Admin] All user accounts have been reset to empty (${count} removed).`);
+    return res.json({ success: true, message: `All accounts have been reset successfully (${count} cleared).`, clearedCount: count });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// On-Demand AI Account Registration & Identification Endpoint (Admin only)
+app.post('/api/admin/accounts/ai-register', async (req: Request, res: Response) => {
+  try {
+    if (!isCallerAdmin(req)) {
+      return res.status(403).json({ success: false, message: 'Admin clearance required to register accounts.' });
+    }
+
+    const { username, email, password, role } = req.body;
+    const cleanUsername = String(username || '').trim();
+    if (!cleanUsername || cleanUsername.length < 2) {
+      return res.status(400).json({ success: false, message: 'Username must be at least 2 characters.' });
+    }
+
+    const cleanEmail = email && String(email).trim().includes('@')
+      ? String(email).trim().toLowerCase()
+      : `${cleanUsername.toLowerCase().replace(/[^a-z0-9_-]/g, '')}_${Date.now().toString(36)}@player.local`;
+
+    const userPassword = String(password || 'SpherePlayer2026').trim();
+    const isAdmin = role === 'admin';
+
+    // Check if account already exists
+    const existing = users.find(u => u.username.toLowerCase() === cleanUsername.toLowerCase() || u.email.toLowerCase() === cleanEmail);
+    if (existing) {
+      return res.status(409).json({ success: false, message: `Account @${cleanUsername} is already registered.` });
+    }
+
+    const now = new Date().toISOString();
+    const newId = 'user-' + Date.now().toString(36) + '-' + Math.random().toString(36).substring(2, 6);
+
+    // AI Account Identification Analysis
+    let aiRiskCategory = isAdmin ? 'Clean Verified Administrator' : 'AI-Verified Active Player';
+    let aiExplanation = isAdmin 
+      ? 'System Administrator account. Identified and authenticated.' 
+      : 'On-demand registered account verified by AI security scanner.';
+    let suspiciousScore = 5;
+
+    try {
+      const aiPrompt = `Identify and analyze this newly created game account profile:
+Username: "${cleanUsername}"
+Email: "${cleanEmail}"
+Role: "${isAdmin ? 'admin' : 'user'}"
+
+Evaluate if this username or email looks like a bot, spam, or valid player. Respond with a JSON object:
+{
+  "suspiciousScore": number (0 to 100),
+  "riskCategory": string (e.g. "Clean Verified Player", "Community Creator", "Flagged Pattern"),
+  "explanation": string (1 concise sentence explaining identification)
+}`;
+
+      const aiResponse = await ai.models.generateContent({
+        model: 'gemini-3.8-flash',
+        contents: aiPrompt,
+        config: { responseMimeType: 'application/json' }
+      });
+
+      if (aiResponse.text) {
+        const parsed = JSON.parse(aiResponse.text);
+        if (typeof parsed.suspiciousScore === 'number') suspiciousScore = parsed.suspiciousScore;
+        if (parsed.riskCategory) aiRiskCategory = parsed.riskCategory;
+        if (parsed.explanation) aiExplanation = parsed.explanation;
+      }
+    } catch (aiErr) {
+      console.warn('AI identification model fallback:', aiErr);
+    }
+
+    const newUser: User = {
+      id: newId,
+      username: cleanUsername,
+      email: cleanEmail,
+      password: userPassword,
+      joinedAt: now,
+      lastLoginAt: now,
+      gamesPlayed: 0,
+      gamesCreatedCount: 0,
+      highScores: {},
+      savedProgress: {},
+      favoriteGameIds: [],
+      createdGameIds: [],
+      isBlocked: suspiciousScore >= 85,
+      isFlagged: suspiciousScore >= 60,
+      suspiciousScore,
+      isAdmin,
+      role: isAdmin ? 'admin' : 'user',
+      aiRiskCategory,
+      aiExplanation,
+      lastAiAuditAt: now
+    };
+
+    users.push(newUser);
+    saveUsers();
+
+    const { password: _, ...sanitizedUser } = newUser as any;
+    res.status(201).json({
+      success: true,
+      user: sanitizedUser,
+      aiAnalysis: {
+        riskCategory: aiRiskCategory,
+        explanation: aiExplanation,
+        suspiciousScore
+      },
+      message: `Account @${cleanUsername} registered and AI-identified successfully!`
+    });
+  } catch (err: any) {
+    console.error('Error in on-demand AI account registration:', err);
+    res.status(500).json({ success: false, message: err.message || 'Server error registering account.' });
   }
 });
 
@@ -993,7 +1118,7 @@ app.post('/api/users/:id/unblock', (req: Request, res: Response) => {
 });
 
 // Bulk Unblock All Accounts Endpoint (Admin only)
-app.post('/api/admin/unblock-all', (req: Request, res: Response) => {
+const handleUnblockAll = (req: Request, res: Response) => {
   if (!isCallerAdmin(req)) {
     return res.status(403).json({ success: false, message: 'Admin clearance required to unblock accounts.' });
   }
@@ -1018,7 +1143,10 @@ app.post('/api/admin/unblock-all', (req: Request, res: Response) => {
     totalAccounts: users.length,
     message: `All accounts have been successfully unblocked and cleared (${unblockedCount} account(s) updated).`
   });
-});
+};
+
+app.post('/api/admin/unblock-all', handleUnblockAll);
+app.post('/api/users/unblock-all', handleUnblockAll);
 
 // Trigger Manual or Hourly AI Security Audit (Admin only)
 app.post('/api/admin/ai-security-audit', async (req: Request, res: Response) => {
@@ -1034,17 +1162,16 @@ app.post('/api/admin/ai-security-audit', async (req: Request, res: Response) => 
   }
 });
 
-// Get Audit Status & Timer Schedule (Admin only)
+// Get Audit Status (Admin only, On-Demand)
 app.get('/api/admin/audit-status', (req: Request, res: Response) => {
   if (!isCallerAdmin(req)) {
     return res.status(403).json({ success: false, message: 'Admin clearance required to view audit status.' });
   }
-  const nextScheduledAt = new Date(lastAuditTime + AUDIT_INTERVAL_MS).toISOString();
   res.json({
     success: true,
     report: latestAiAuditReport,
     lastAuditTime: new Date(lastAuditTime).toISOString(),
-    nextScheduledAt
+    isManualOnly: true
   });
 });
 
@@ -1066,21 +1193,7 @@ async function startServer() {
   }
 
   app.listen(PORT, () => {
-    console.log(`[Sphere Strike] Server running on http://localhost:${PORT}`);
-    
-    // Perform initial AI Security Audit scan and start 1-hour background interval
-    runAiSecurityAuditCore().then(() => {
-      console.log('[Sphere Strike AI Security] Initial AI Security Audit completed.');
-    }).catch(err => {
-      console.warn('[Sphere Strike AI Security] Initial audit warning:', err);
-    });
-
-    setInterval(() => {
-      console.log('[Sphere Strike AI Security] Running automated hourly AI Security Audit across all accounts...');
-      runAiSecurityAuditCore().catch(err => {
-        console.error('[Sphere Strike AI Security] Hourly audit error:', err);
-      });
-    }, AUDIT_INTERVAL_MS);
+    console.log(`[Sphere Strike] Server running on http://localhost:${PORT} (On-Demand AI Security Active)`);
   });
 }
 

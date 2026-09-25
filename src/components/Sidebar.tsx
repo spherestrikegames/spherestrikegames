@@ -246,6 +246,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </button>
               );
             })}
+
+            {/* Admin Moderation Tab - Only visible to admin accounts */}
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => onNavigate('admin')}
+                title="Admin Moderation & Security Monitor"
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer mt-1 ${
+                  currentView === 'admin'
+                    ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-950/60 border border-emerald-400/50'
+                    : 'bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-300 hover:text-emerald-100 border border-emerald-500/30'
+                }`}
+              >
+                <ShieldCheck className={`w-4 h-4 shrink-0 ${currentView === 'admin' ? 'text-white' : 'text-emerald-400 animate-pulse'}`} />
+                {isOpen && (
+                  <div className="flex items-center justify-between flex-1 overflow-hidden">
+                    <span className="truncate">Admin Moderation</span>
+                    <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 font-bold uppercase">
+                      Admin
+                    </span>
+                  </div>
+                )}
+              </button>
+            )}
           </div>
 
           {/* Creator Tools Section */}
@@ -281,9 +305,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {/* Admin Mode Quick Access - only visible to active verified administrator */}
             {isAdmin && (
               <button
-                onClick={onOpenAdminTerminal}
+                type="button"
+                onClick={() => onNavigate('admin')}
                 title="Admin Security & Moderation Hub"
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-500/40 shadow-sm"
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer ${
+                  currentView === 'admin'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-300 border border-emerald-500/40'
+                }`}
               >
                 <ShieldCheck className="w-4 h-4 shrink-0 text-emerald-400 animate-pulse" />
                 {isOpen && (

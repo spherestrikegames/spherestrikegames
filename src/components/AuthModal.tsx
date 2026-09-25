@@ -335,7 +335,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </>
           ) : (
             <>
-              {/* Login Identifier */}
+              {/* Gamer Tag or Email */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
                   Gamer Tag or Email

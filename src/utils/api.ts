@@ -423,7 +423,7 @@ export async function triggerAiSecurityAudit(): Promise<AiAuditReport> {
   throw new Error(data.message || 'Failed to trigger AI Security Audit');
 }
 
-export async function fetchAiAuditStatus(): Promise<{ report: AiAuditReport | null; nextScheduledAt: string }> {
+export async function fetchAiAuditStatus(): Promise<{ report: AiAuditReport | null; isManualOnly: boolean; lastAuditTime?: string }> {
   try {
     const res = await fetch('/api/admin/audit-status', {
       headers: getAdminHeaders()
@@ -432,13 +432,14 @@ export async function fetchAiAuditStatus(): Promise<{ report: AiAuditReport | nu
       const data = await res.json();
       return {
         report: data.report || null,
-        nextScheduledAt: data.nextScheduledAt || new Date(Date.now() + 3600000).toISOString()
+        isManualOnly: true,
+        lastAuditTime: data.lastAuditTime
       };
     }
   } catch {}
   return {
     report: null,
-    nextScheduledAt: new Date(Date.now() + 3600000).toISOString()
+    isManualOnly: true
   };
 }
 
@@ -585,12 +586,43 @@ export async function deleteAllUserAccountsApi(): Promise<boolean> {
     });
     if (res.ok) {
       const data = await safeParseResponse(res, 'Failed to delete all users.');
+      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify([]));
       return Boolean(data.success);
     }
   } catch {}
 
   localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify([]));
   return true;
+}
+
+export async function resetAllAccountsApi(): Promise<{ success: boolean; message: string; clearedCount?: number }> {
+  try {
+    const res = await fetch('/api/admin/accounts/reset', { 
+      method: 'POST',
+      headers: getAdminHeaders()
+    });
+    if (res.ok) {
+      const data = await safeParseResponse(res, 'Failed to reset accounts.');
+      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify([]));
+      return { success: true, message: data.message || 'All accounts have been reset.', clearedCount: data.clearedCount };
+    }
+  } catch {}
+
+  // Fallback to DELETE /api/users
+  try {
+    const res = await fetch('/api/users', {
+      method: 'DELETE',
+      headers: getAdminHeaders()
+    });
+    if (res.ok) {
+      const data = await safeParseResponse(res, 'Failed to reset accounts.');
+      localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify([]));
+      return { success: true, message: data.message || 'All accounts have been reset.', clearedCount: data.clearedCount };
+    }
+  } catch {}
+
+  localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify([]));
+  return { success: true, message: 'All accounts storage reset successfully.' };
 }
 
 export async function loginAccountApi(identifier: string, password: string): Promise<User> {
@@ -743,6 +775,20 @@ export async function importAccountsBackupApi(importedData: any): Promise<{ succ
     body: JSON.stringify(importedData)
   });
   return await safeParseResponse(res, 'Failed to import accounts backup.');
+}
+
+export async function registerAccountWithAiApi(accountData: {
+  username: string;
+  email?: string;
+  password?: string;
+  role?: 'admin' | 'user';
+}): Promise<{ success: boolean; user: User; aiAnalysis?: any; message: string }> {
+  const res = await fetch('/api/admin/accounts/ai-register', {
+    method: 'POST',
+    headers: getAdminHeaders(),
+    body: JSON.stringify(accountData)
+  });
+  return await safeParseResponse(res, 'Failed to register and AI-identify account.');
 }
 
 
