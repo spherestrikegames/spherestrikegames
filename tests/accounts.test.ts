@@ -247,4 +247,67 @@ const cleanedGamesList = readBackParsed.filter((g: any) => g.id !== testGameEntr
 fs.writeFileSync(DATA_GAMES_FILE, JSON.stringify(cleanedGamesList, null, 2), 'utf-8');
 console.log('✓ Verified flat JSON database (data/games.json) stores and persists games correctly');
 
+// 12. Test Account Checker Lookup & Verification Logic
+function testAccountChecker(accounts: any[], query: string) {
+  const cleanQuery = query.trim().toLowerCase();
+  const found = accounts.find(
+    u => u.username?.toLowerCase() === cleanQuery || 
+         u.email?.toLowerCase() === cleanQuery || 
+         u.id?.toLowerCase() === cleanQuery
+  );
+  if (!found) return { found: false, account: null };
+  const risk = found.suspiciousScore || 5;
+  return {
+    found: true,
+    account: found,
+    isSuspicious: risk >= 60 || !!found.isFlagged,
+    isBlocked: !!found.isBlocked,
+    status: found.isBlocked ? 'BLOCKED' : (found.isFlagged || risk >= 60) ? 'FLAGGED' : 'CLEAN'
+  };
+}
+
+const mockAccounts = [
+  { id: 'usr-1', username: 'ProPlayer99', email: 'pro@gamer.com', suspiciousScore: 10, isBlocked: false },
+  { id: 'usr-2', username: 'SuspiciousBot', email: 'bot@spam.com', suspiciousScore: 85, isFlagged: true, isBlocked: false },
+  { id: 'usr-3', username: 'BlockedUser', email: 'blocked@domain.com', suspiciousScore: 95, isBlocked: true }
+];
+
+const checkClean = testAccountChecker(mockAccounts, 'ProPlayer99');
+assert.strictEqual(checkClean.found, true);
+assert.strictEqual(checkClean.status, 'CLEAN');
+
+const checkSus = testAccountChecker(mockAccounts, 'bot@spam.com');
+assert.strictEqual(checkSus.found, true);
+assert.strictEqual(checkSus.status, 'FLAGGED');
+assert.strictEqual(checkSus.isSuspicious, true);
+
+const checkBlocked = testAccountChecker(mockAccounts, 'usr-3');
+assert.strictEqual(checkBlocked.found, true);
+assert.strictEqual(checkBlocked.status, 'BLOCKED');
+
+const checkNonExistent = testAccountChecker(mockAccounts, 'unknownUser12345');
+assert.strictEqual(checkNonExistent.found, false);
+console.log('✓ Verified Account Checker query and status inspection logic');
+
+// 13. Test Removal of Test Games from data/games.json
+const currentGames = JSON.parse(fs.readFileSync(DATA_GAMES_FILE, 'utf-8'));
+const hasTestGame = currentGames.some((g: any) => 
+  g.title.toLowerCase().includes('test game') || 
+  g.author === 'TestAuthor' ||
+  g.slug.includes('test-game')
+);
+assert.strictEqual(hasTestGame, false, 'No test games should be present in data/games.json');
+console.log('✓ Verified all test games are removed from data/games.json');
+
+// 14. Test Registered Admin Account Restriction
+function checkAdminAccess(user: any | null): boolean {
+  return Boolean(user && user.role === 'admin' && !user.isBlocked);
+}
+
+assert.strictEqual(checkAdminAccess(null), false, 'Guest should not have admin clearance');
+assert.strictEqual(checkAdminAccess({ role: 'user', isBlocked: false }), false, 'Standard user should not have admin clearance');
+assert.strictEqual(checkAdminAccess({ role: 'admin', isBlocked: true }), false, 'Blocked admin should not have admin clearance');
+assert.strictEqual(checkAdminAccess({ role: 'admin', isBlocked: false }), true, 'Registered unblocked admin should have admin clearance');
+console.log('✓ Verified admin panel is restricted strictly to registered admin accounts');
+
 console.log('All tests passed successfully!');

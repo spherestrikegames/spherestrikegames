@@ -4,9 +4,11 @@ export interface User {
   email: string;
   password?: string;
   avatarUrl?: string;
+  avatar?: string;
   isAdmin?: boolean;
   role?: 'admin' | 'user';
   joinedAt: string;
+  createdAt?: string;
   lastLoginAt?: string;
   gamesPlayed?: number;
   gamesCreatedCount?: number;
@@ -14,6 +16,12 @@ export interface User {
   savedProgress?: Record<string, any>;
   favoriteGameIds?: string[];
   createdGameIds?: string[];
+  stats?: {
+    level?: number;
+    highScore?: number;
+    gamesPlayed?: number;
+    hoursPlayed?: number;
+  };
   isBlocked?: boolean;
   blockedReason?: string;
   blockedAt?: string;

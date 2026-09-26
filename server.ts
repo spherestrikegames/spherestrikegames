@@ -47,7 +47,12 @@ function loadGames() {
     if (fs.existsSync(DATA_FILE)) {
       const raw = fs.readFileSync(DATA_FILE, 'utf-8');
       const parsed: Game[] = JSON.parse(raw);
-      games = parsed.filter(g => g.id !== 'game-1790122769939-ad7ce' && g.title.toLowerCase().trim() !== 'spherestrike');
+      games = parsed.filter(g => 
+        g.id !== 'game-1790122769939-ad7ce' && 
+        g.title.toLowerCase().trim() !== 'spherestrike' &&
+        !g.title.toLowerCase().includes('test game') &&
+        g.author !== 'TestAuthor'
+      );
       if (games.length !== parsed.length) {
         saveGames();
       }

@@ -13,7 +13,13 @@ import {
   deleteUserAccountApi, resetAllAccountsApi, registerAccountWithAiApi
 } from '../utils/api';
 
-export const AdminAccountMonitor: React.FC = () => {
+interface AdminAccountMonitorProps {
+  initialTab?: 'monitor' | 'checker';
+}
+
+export const AdminAccountMonitor: React.FC<AdminAccountMonitorProps> = ({
+  initialTab = 'monitor'
+}) => {
   const [users, setUsers] = useState<User[]>([]);
   const [auditReport, setAuditReport] = useState<AiAuditReport | null>(null);
   const [lastAuditTime, setLastAuditTime] = useState<string>('');
@@ -26,6 +32,17 @@ export const AdminAccountMonitor: React.FC = () => {
   const [customReason, setCustomReason] = useState<string>('');
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Dedicated Account Checker Tool state
+  const [activeSubTab, setActiveSubTab] = useState<'monitor' | 'checker'>(initialTab);
+  const [checkerQuery, setCheckerQuery] = useState<string>('');
+  const [checkedAccount, setCheckedAccount] = useState<User | null>(null);
+  const [isCheckingAccount, setIsCheckingAccount] = useState<boolean>(false);
+  const [checkerResultMsg, setCheckerResultMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    setActiveSubTab(initialTab);
+  }, [initialTab]);
 
   // On-demand AI account registration modal state
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState<boolean>(false);
@@ -360,8 +377,276 @@ export const AdminAccountMonitor: React.FC = () => {
         </div>
       </div>
 
-      {/* Multi-Account Cloud Data Storage & Backup Hub */}
-      <div className="p-4 sm:p-5 rounded-2xl bg-[#0d1627] border border-blue-500/25 shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      {/* Sub-navigation switcher within AdminAccountMonitor */}
+      <div className="flex items-center gap-2 bg-slate-900/30 p-1.5 rounded-2xl border border-white/[0.08] backdrop-blur-xl w-fit">
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('monitor')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer backdrop-blur-md ${
+            activeSubTab === 'monitor'
+              ? 'bg-blue-600/80 text-white shadow-lg shadow-blue-950/40 border border-blue-400/30'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <ShieldAlert className="w-4 h-4 text-blue-300" />
+          <span>Live Sentinel & Overview</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('checker')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer backdrop-blur-md ${
+            activeSubTab === 'checker'
+              ? 'bg-gradient-to-r from-purple-600/90 to-indigo-600/90 text-white shadow-lg shadow-purple-950/40 border border-purple-400/30'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <UserCheck className="w-4 h-4 text-purple-300" />
+          <span>Account Checker Tool</span>
+          <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-purple-400/20 text-purple-200 border border-purple-400/30">
+            Inspector
+          </span>
+        </button>
+      </div>
+
+      {/* Dedicated Interactive Account Checker View */}
+      {activeSubTab === 'checker' && (
+        <div className="p-6 rounded-3xl bg-slate-900/25 border border-purple-500/30 backdrop-blur-2xl shadow-2xl space-y-6 animate-in fade-in">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                  <UserCheck className="w-5 h-5" />
+                </div>
+                <h3 className="text-base sm:text-lg font-bold text-white font-['Outfit']">
+                  AI Account Checker & Security Inspector
+                </h3>
+              </div>
+              <p className="text-xs text-slate-300 mt-1">
+                Lookup any user account across the database to inspect security risk, score patterns, ban status, and creator actions in real-time.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleRunAiAudit}
+              disabled={isAuditing}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold shadow-lg shadow-purple-950 border border-purple-400/30 transition-all cursor-pointer disabled:opacity-50 shrink-0"
+            >
+              <Sparkles className={`w-4 h-4 ${isAuditing ? 'animate-spin' : ''}`} />
+              <span>{isAuditing ? 'Auditing Database...' : 'Run Full AI Audit'}</span>
+            </button>
+          </div>
+
+          {/* Quick Lookup Form */}
+          <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] space-y-3">
+            <label className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+              <Search className="w-3.5 h-3.5 text-purple-400" />
+              <span>Account Search & Verification Query</span>
+            </label>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <input
+                type="text"
+                value={checkerQuery}
+                onChange={(e) => {
+                  setCheckerQuery(e.target.value);
+                  setCheckerResultMsg(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const q = checkerQuery.trim().toLowerCase();
+                    const match = users.find(u => 
+                      u.username.toLowerCase() === q || 
+                      u.email.toLowerCase() === q || 
+                      u.id.toLowerCase() === q
+                    );
+                    if (match) {
+                      setCheckedAccount(match);
+                      setCheckerResultMsg(`✓ Account found: @${match.username}`);
+                    } else {
+                      setCheckedAccount(null);
+                      setCheckerResultMsg(`No registered account found matching "${checkerQuery}"`);
+                    }
+                  }
+                }}
+                placeholder="Enter exact username (e.g. Arcader), email, or User ID..."
+                className="flex-1 px-4 py-2.5 rounded-xl bg-[#070b14] border border-white/[0.1] focus:border-purple-500 text-white text-xs sm:text-sm placeholder-slate-500 focus:outline-none font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const q = checkerQuery.trim().toLowerCase();
+                  if (!q) {
+                    setCheckerResultMsg('Please enter a username or email to check.');
+                    return;
+                  }
+                  setIsCheckingAccount(true);
+                  setTimeout(() => {
+                    const match = users.find(u => 
+                      u.username.toLowerCase() === q || 
+                      u.email.toLowerCase() === q || 
+                      u.id.toLowerCase() === q
+                    );
+                    if (match) {
+                      setCheckedAccount(match);
+                      setCheckerResultMsg(`✓ Account verification complete: @${match.username}`);
+                    } else {
+                      setCheckedAccount(null);
+                      setCheckerResultMsg(`No registered account found matching "${checkerQuery}"`);
+                    }
+                    setIsCheckingAccount(false);
+                  }, 200);
+                }}
+                className="px-5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 active:scale-[0.98] text-white text-xs font-bold transition-all cursor-pointer shadow-lg shadow-purple-950 flex items-center justify-center gap-2"
+              >
+                <Search className="w-4 h-4" />
+                <span>Check Account</span>
+              </button>
+            </div>
+
+            {checkerResultMsg && (
+              <p className={`text-xs font-mono mt-1 ${checkerResultMsg.startsWith('✓') ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {checkerResultMsg}
+              </p>
+            )}
+          </div>
+
+          {/* Account Inspection Card */}
+          {checkedAccount ? (
+            <div className="p-5 rounded-2xl bg-white/[0.02] border border-purple-500/30 backdrop-blur-2xl space-y-4 animate-in fade-in">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.08] pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600/80 to-indigo-600/80 flex items-center justify-center text-white font-bold text-base shadow-inner overflow-hidden border border-purple-400/30 backdrop-blur-md">
+                    {(checkedAccount.avatar || checkedAccount.avatarUrl) ? (
+                      <img src={checkedAccount.avatar || checkedAccount.avatarUrl} alt={checkedAccount.username} className="w-full h-full object-cover rounded-2xl" />
+                    ) : (
+                      checkedAccount.username.charAt(0).toUpperCase()
+                    )}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="text-base font-bold text-white font-mono">@{checkedAccount.username}</h4>
+                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold uppercase border backdrop-blur-md ${
+                        checkedAccount.isBlocked 
+                          ? 'bg-rose-500/20 text-rose-300 border-rose-500/40' 
+                          : checkedAccount.isFlagged 
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' 
+                          : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      }`}>
+                        {checkedAccount.isBlocked ? 'BLOCKED' : checkedAccount.isFlagged ? 'FLAGGED' : 'ACTIVE / CLEAN'}
+                      </span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/[0.06] text-slate-300 border border-white/[0.1] backdrop-blur-md">
+                        Role: {checkedAccount.role || 'user'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 font-mono mt-0.5">{checkedAccount.email} • ID: {checkedAccount.id}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  {checkedAccount.isBlocked ? (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await handleUnblockUser(checkedAccount.id, checkedAccount.username);
+                        setCheckedAccount({ ...checkedAccount, isBlocked: false });
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-emerald-600/80 hover:bg-emerald-500 text-white text-xs font-bold transition-all cursor-pointer shadow-md backdrop-blur-md flex items-center gap-1.5 border border-emerald-400/30"
+                    >
+                      <Unlock className="w-3.5 h-3.5" />
+                      <span>Unblock Account</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleBlockUser(checkedAccount.id, checkedAccount.username)}
+                      className="px-3.5 py-2 rounded-xl bg-rose-600/80 hover:bg-rose-500 text-white text-xs font-bold transition-all cursor-pointer shadow-md backdrop-blur-md flex items-center gap-1.5 border border-rose-400/30"
+                    >
+                      <Lock className="w-3.5 h-3.5" />
+                      <span>Block Account</span>
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await handleDeleteAccount(checkedAccount.id, checkedAccount.username);
+                      setCheckedAccount(null);
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-500/30 text-xs font-bold backdrop-blur-md transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete User</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Account Details Breakdown */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] backdrop-blur-md">
+                  <span className="text-[10px] font-mono uppercase text-slate-400">Suspicious Score</span>
+                  <div className={`text-base font-bold font-mono mt-1 ${
+                    (checkedAccount.suspiciousScore || 0) >= 60 ? 'text-rose-400' : 'text-emerald-400'
+                  }`}>
+                    {checkedAccount.suspiciousScore || 5}%
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] backdrop-blur-md">
+                  <span className="text-[10px] font-mono uppercase text-slate-400">Games Created</span>
+                  <div className="text-base font-bold font-mono text-white mt-1">
+                    {checkedAccount.gamesCreatedCount || 0}
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] backdrop-blur-md">
+                  <span className="text-[10px] font-mono uppercase text-slate-400">High Score</span>
+                  <div className="text-base font-bold font-mono text-amber-400 mt-1">
+                    {checkedAccount.stats?.highScore || (checkedAccount.highScores ? Math.max(0, ...Object.values(checkedAccount.highScores)) : 0)} pts
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/[0.06] backdrop-blur-md">
+                  <span className="text-[10px] font-mono uppercase text-slate-400">Member Since</span>
+                  <div className="text-xs font-medium text-slate-300 mt-1 truncate">
+                    {new Date(checkedAccount.joinedAt || checkedAccount.createdAt || Date.now()).toLocaleDateString()}
+                  </div>
+                </div>
+              </div>
+
+              {checkedAccount.aiExplanation && (
+                <div className="p-3 rounded-xl bg-purple-950/30 border border-purple-500/30 text-xs text-purple-200 backdrop-blur-md">
+                  <span className="font-bold">AI Security Analysis:</span> {checkedAccount.aiExplanation}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="p-6 rounded-2xl bg-white/[0.02] border border-dashed border-white/[0.1] backdrop-blur-md text-center text-slate-400 text-xs font-mono">
+              <UserCheck className="w-8 h-8 mx-auto mb-2 text-purple-400 opacity-60" />
+              <p>Type any username or email in the box above to inspect account credentials and security flags.</p>
+              <div className="mt-3 flex items-center justify-center gap-2 flex-wrap">
+                <span className="text-[11px] text-slate-400">Quick suggestions:</span>
+                {users.slice(0, 4).map(u => (
+                  <button
+                    key={`quick-${u.id}`}
+                    type="button"
+                    onClick={() => {
+                      setCheckerQuery(u.username);
+                      setCheckedAccount(u);
+                      setCheckerResultMsg(`✓ Account loaded: @${u.username}`);
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-purple-300 text-[11px] font-mono transition-colors cursor-pointer border border-white/[0.06] backdrop-blur-sm"
+                  >
+                    @{u.username}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/30 border border-blue-500/25 shadow-xl backdrop-blur-xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="flex items-start gap-3">
           <div className="p-2.5 rounded-xl bg-blue-600/20 text-blue-400 border border-blue-500/30 shrink-0">
             <HardDrive className="w-5 h-5" />
@@ -422,9 +707,9 @@ export const AdminAccountMonitor: React.FC = () => {
       </div>
 
       {/* On-Demand AI Account Identification & Registration Hub */}
-      <div className="p-5 rounded-2xl bg-gradient-to-r from-blue-950/70 via-indigo-950/60 to-slate-900/90 border border-blue-500/30 shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+      <div className="p-5 rounded-2xl bg-gradient-to-r from-blue-950/40 via-indigo-950/30 to-slate-900/40 border border-blue-500/25 shadow-xl backdrop-blur-2xl flex flex-col lg:flex-row lg:items-center justify-between gap-5">
         <div className="flex items-start gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shrink-0 shadow-md shadow-blue-900">
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-500/80 to-indigo-600/80 flex items-center justify-center text-white shrink-0 shadow-md shadow-blue-900/50 backdrop-blur-md border border-blue-400/30">
             <Zap className="w-5 h-5" />
           </div>
           <div>
@@ -432,7 +717,7 @@ export const AdminAccountMonitor: React.FC = () => {
               <h4 className="text-sm font-bold text-white font-['Outfit']">
                 On-Demand Gemini AI Account Identification Hub
               </h4>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 font-bold uppercase tracking-wider">
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 font-bold uppercase tracking-wider backdrop-blur-md">
                 Click-To-Scan / On Demand
               </span>
             </div>
@@ -458,7 +743,7 @@ export const AdminAccountMonitor: React.FC = () => {
               setIsRegisterModalOpen(true);
               setRegError('');
             }}
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.98] text-white text-xs font-bold shadow-lg shadow-emerald-950 border border-emerald-400/30 transition-all cursor-pointer flex items-center gap-2"
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600/90 to-teal-600/90 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.98] text-white text-xs font-bold shadow-lg shadow-emerald-950/40 border border-emerald-400/30 backdrop-blur-md transition-all cursor-pointer flex items-center gap-2"
             title="Register a new user account with immediate Gemini AI profile identification"
           >
             <UserPlus className="w-4 h-4 text-white" />
@@ -469,7 +754,7 @@ export const AdminAccountMonitor: React.FC = () => {
             type="button"
             onClick={handleRunAiAudit}
             disabled={isAuditing}
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-[0.98] text-white text-xs font-bold shadow-lg shadow-blue-950 border border-blue-400/30 transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50"
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600/90 to-indigo-600/90 hover:from-blue-500 hover:to-indigo-500 active:scale-[0.98] text-white text-xs font-bold shadow-lg shadow-blue-950/40 border border-blue-400/30 backdrop-blur-md transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50"
           >
             <Sparkles className={`w-4 h-4 ${isAuditing ? 'animate-spin text-amber-300' : 'text-amber-300'}`} />
             <span>{isAuditing ? 'Identifying Accounts...' : 'Run AI Account Identification'}</span>
@@ -479,8 +764,8 @@ export const AdminAccountMonitor: React.FC = () => {
 
       {/* On-Demand AI Account Registration Modal */}
       {isRegisterModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="relative w-full max-w-md bg-[#0c1322] border border-blue-500/40 rounded-3xl p-6 sm:p-7 shadow-2xl shadow-blue-950/80 space-y-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xl animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md bg-slate-900/60 border border-blue-500/30 rounded-3xl p-6 sm:p-7 shadow-2xl shadow-blue-950/60 backdrop-blur-2xl space-y-5">
             <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">

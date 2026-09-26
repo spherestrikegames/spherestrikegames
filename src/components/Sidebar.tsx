@@ -333,6 +333,58 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 )}
               </button>
             )}
+            {/* Account Quick Access / Status */}
+            {currentUser ? (
+              <div className={`p-2 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center ${isOpen ? 'justify-between' : 'justify-center'} gap-2`}>
+                <div className="flex items-center gap-2 overflow-hidden">
+                  <div className="w-6 h-6 rounded-lg bg-blue-600 flex items-center justify-center font-bold text-white text-xs shrink-0 overflow-hidden">
+                    {(currentUser.avatar || currentUser.avatarUrl) ? (
+                      <img src={currentUser.avatar || currentUser.avatarUrl} alt={currentUser.username} className="w-full h-full object-cover rounded-lg" />
+                    ) : (
+                      currentUser.username.charAt(0).toUpperCase()
+                    )}
+                  </div>
+                  {isOpen && (
+                    <div className="truncate">
+                      <div className="text-xs font-bold text-white truncate">@{currentUser.username}</div>
+                      <div className="text-[10px] text-blue-400 font-mono">Lvl {currentUser.stats?.level || 1}</div>
+                    </div>
+                  )}
+                </div>
+                {isOpen && onLogout && (
+                  <button
+                    type="button"
+                    onClick={onLogout}
+                    title="Log Out"
+                    className="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-1.5 pt-1">
+                <button
+                  type="button"
+                  onClick={onOpenLogin}
+                  title="Log In"
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-all cursor-pointer bg-white/[0.04] text-slate-300 hover:text-white hover:bg-white/[0.08] border border-white/[0.06] ${!isOpen ? 'justify-center' : ''}`}
+                >
+                  <LogIn className="w-4 h-4 text-blue-400 shrink-0" />
+                  {isOpen && <span>Log In</span>}
+                </button>
+                {isOpen && (
+                  <button
+                    type="button"
+                    onClick={onOpenSignup}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 shadow-md shadow-blue-950 transition-all cursor-pointer"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    <span>Create Account</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

@@ -1,15 +1,20 @@
 import React, { useState } from 'react';
 import { 
   ShieldCheck, ShieldAlert, Lock, Unlock, KeyRound, Sparkles, 
-  Check, AlertTriangle, Trash2, Edit3, Gamepad2, Users, Shield, RotateCcw
+  Check, AlertTriangle, Trash2, Edit3, Gamepad2, Users, Shield, RotateCcw,
+  UserCheck, Search, UserPlus, LogIn
 } from 'lucide-react';
 import { AdminAccountMonitor } from './AdminAccountMonitor';
+import { User } from '../types/user';
 
 interface AdminSecretTerminalProps {
   isAdmin: boolean;
-  onUnlockAdmin: () => void;
-  onLockAdmin: () => void;
+  onUnlockAdmin?: () => void;
+  onLockAdmin?: () => void;
   totalGamesCount: number;
+  currentUser?: User | null;
+  onOpenSignup?: () => void;
+  onOpenLogin?: () => void;
 }
 
 export const AdminSecretTerminal: React.FC<AdminSecretTerminalProps> = ({
@@ -17,192 +22,121 @@ export const AdminSecretTerminal: React.FC<AdminSecretTerminalProps> = ({
   onUnlockAdmin,
   onLockAdmin,
   totalGamesCount,
+  currentUser,
+  onOpenSignup,
+  onOpenLogin,
 }) => {
-  const [adminTab, setAdminTab] = useState<'security' | 'games'>('security');
-  const [passcode, setPasscode] = useState<string>('');
-  const [errorMsg, setErrorMsg] = useState<string>('');
-  const [successMsg, setSuccessMsg] = useState<string>('');
-
-  const handleVerifyCode = (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg('');
-    setSuccessMsg('');
-
-    const raw = passcode.trim();
-    const clean = raw.toLowerCase().replace(/[\s\-_.@]/g, '');
-
-    // Recognized admin clearance passkeys: 'goyal.rishi', 'rishi_admin', 'macbookair'
-    if (
-      raw === 'goyal.rishi' || 
-      clean === 'goyalrishi' || 
-      clean === 'rishiadmin' || 
-      clean === 'macbookair'
-    ) {
-      setSuccessMsg('Access Granted! Clearance authenticated.');
-      localStorage.setItem('spherestrike_admin_unlocked', 'true');
-      localStorage.setItem('spherestrike_admin_passkey', raw);
-      setTimeout(() => {
-        onUnlockAdmin();
-        setPasscode('');
-        setSuccessMsg('');
-      }, 500);
-    } else {
-      setErrorMsg('Invalid clearance passkey. Access denied.');
-    }
-  };
-
-  const handleRestartCode = () => {
-    setPasscode('');
-    setErrorMsg('');
-    setSuccessMsg('');
-    localStorage.removeItem('spherestrike_admin_unlocked');
-    localStorage.removeItem('spherestrike_admin_passkey');
-    if (isAdmin) {
-      onLockAdmin();
-    }
-  };
+  const [adminTab, setAdminTab] = useState<'security' | 'checker' | 'games'>('security');
 
   return (
-    <section id="admin-terminal-section" className="mt-14 mb-8 max-w-5xl mx-auto px-4 sm:px-6">
-      <div className={`relative overflow-hidden rounded-3xl border transition-all duration-300 p-6 sm:p-8 backdrop-blur-xl ${
+    <section id="admin-terminal-section" className="mt-8 mb-8 max-w-5xl mx-auto px-4 sm:px-6">
+      {/* Glassmorphic Container */}
+      <div className={`relative overflow-hidden rounded-3xl border transition-all duration-300 p-6 sm:p-8 backdrop-blur-2xl shadow-2xl ${
         isAdmin 
-          ? 'bg-[#0f1a18]/90 border-emerald-500/30 shadow-2xl shadow-emerald-950/40' 
-          : 'bg-[#0b101d]/90 border-blue-500/25 shadow-xl shadow-blue-950/30'
+          ? 'bg-slate-900/35 border-emerald-500/30 shadow-emerald-950/20' 
+          : 'bg-slate-900/40 border-amber-500/30 shadow-amber-950/20'
       }`}>
-        {/* Ambient Glow */}
-        <div className={`absolute -top-20 -right-20 w-52 h-52 rounded-full blur-3xl pointer-events-none transition-colors duration-500 ${
-          isAdmin ? 'bg-emerald-500/20' : 'bg-blue-600/15'
+        {/* Ambient Specular Glass Halos */}
+        <div className={`absolute -top-24 -right-24 w-72 h-72 rounded-full blur-3xl pointer-events-none transition-colors duration-500 ${
+          isAdmin ? 'bg-emerald-500/15' : 'bg-amber-500/15'
         }`} />
-        <div className={`absolute -bottom-20 -left-20 w-52 h-52 rounded-full blur-3xl pointer-events-none transition-colors duration-500 ${
-          isAdmin ? 'bg-amber-500/15' : 'bg-indigo-600/15'
+        <div className={`absolute -bottom-24 -left-24 w-72 h-72 rounded-full blur-3xl pointer-events-none transition-colors duration-500 ${
+          isAdmin ? 'bg-cyan-500/10' : 'bg-rose-500/10'
         }`} />
 
-        <div className="relative z-10 space-y-5">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/[0.06]">
+        <div className="relative z-10 space-y-6">
+          {/* Header Bar */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/[0.08]">
             <div className="flex items-center gap-3.5">
-              <div className={`w-11 h-11 rounded-2xl flex items-center justify-center transition-all ${
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all backdrop-blur-xl ${
                 isAdmin
-                  ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-950'
-                  : 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-950 border border-blue-400/30'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 shadow-lg shadow-emerald-950/40'
+                  : 'bg-amber-500/20 text-amber-300 border border-amber-400/40 shadow-lg shadow-amber-950/40'
               }`}>
-                {isAdmin ? <ShieldCheck className="w-6 h-6" /> : <KeyRound className="w-5 h-5 text-amber-300" />}
+                {isAdmin ? <ShieldCheck className="w-6 h-6 animate-pulse" /> : <Lock className="w-6 h-6 text-amber-300" />}
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-base sm:text-lg font-bold text-white font-['Outfit'] tracking-tight">
-                    {isAdmin ? 'Admin Moderation & AI Security Hub' : 'Secret Accounts Clearance Terminal'}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-base sm:text-xl font-bold text-white font-['Outfit'] tracking-tight">
+                    {isAdmin ? 'Admin Moderation & Security Sentinel' : 'Restricted Administrator Control Panel'}
                   </h3>
-                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border ${
+                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border backdrop-blur-md ${
                     isAdmin 
                       ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 animate-pulse' 
-                      : 'bg-blue-500/20 text-blue-300 border-blue-500/30'
+                      : 'bg-amber-500/20 text-amber-300 border-amber-500/40'
                   }`}>
-                    {isAdmin ? 'Clearance Active' : 'Passkey Protected'}
+                    {isAdmin ? 'Admin Account Verified' : 'Registered Admins Only'}
                   </span>
                 </div>
-                <p className="text-xs text-slate-400 mt-0.5">
+                <p className="text-xs text-slate-300 mt-1 max-w-2xl leading-relaxed">
                   {isAdmin 
-                    ? 'Full moderation controls unlocked: monitor accounts with Gemini AI, reset accounts, and delete inappropriate content.'
-                    : 'Enter the secret access passkey to authenticate admin clearance and unlock moderation controls.'}
+                    ? `Authenticated as @${currentUser?.username} (${currentUser?.email}). You have full clearance to inspect accounts, run AI security audits, and moderate arcade content.`
+                    : 'The Sphere Strike Admin Sentinel is strictly reserved for users who register for an Administrator account.'}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2 self-start sm:self-auto">
-              <button
-                type="button"
-                onClick={handleRestartCode}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 hover:text-white border border-white/[0.1] text-xs font-semibold transition-all cursor-pointer"
-                title="Restart passkey code session and clear inputs"
-              >
-                <RotateCcw className="w-3.5 h-3.5 text-blue-400" />
-                <span>Restart Code</span>
-              </button>
-
-              {isAdmin && (
+            {isAdmin && onLockAdmin && (
+              <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
                 <button
                   type="button"
                   onClick={onLockAdmin}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-rose-950/30 hover:bg-rose-950/60 text-rose-300 border border-rose-500/30 text-xs font-semibold transition-all cursor-pointer"
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white/[0.04] hover:bg-rose-500/20 text-slate-300 hover:text-rose-300 border border-white/[0.08] hover:border-rose-500/40 text-xs font-semibold backdrop-blur-md transition-all cursor-pointer"
                 >
                   <Lock className="w-3.5 h-3.5 text-rose-400" />
-                  <span>Lock Terminal</span>
+                  <span>Lock Session</span>
                 </button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           {!isAdmin ? (
-            /* Locked State: Code Input Form */
-            <div className="p-6 rounded-2xl bg-[#090e1a]/80 border border-white/[0.06] space-y-4">
-              <form onSubmit={handleVerifyCode} className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <KeyRound className="w-4 h-4 text-blue-400" />
-                      Enter Accounts Clearance Code
-                    </span>
-                    <span className="text-[10px] text-blue-400 font-mono font-normal">Passkey Clearance</span>
-                  </label>
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <div className="relative flex-1">
-                      <input
-                        type="password"
-                        value={passcode}
-                        onChange={(e) => {
-                          setPasscode(e.target.value);
-                          if (errorMsg) setErrorMsg('');
-                        }}
-                        placeholder="Enter admin clearance passkey..."
-                        className="w-full px-4 py-2.5 rounded-xl bg-black/50 border border-white/[0.1] focus:border-blue-500 text-white text-xs sm:text-sm font-mono placeholder-slate-500 focus:outline-none transition-all"
-                        autoComplete="off"
-                      />
-                    </div>
-                    <button
-                      type="submit"
-                      className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 active:scale-[0.98] text-white text-xs sm:text-sm font-bold shadow-lg shadow-blue-950 border border-blue-400/30 transition-all cursor-pointer flex items-center justify-center gap-2 shrink-0"
-                    >
-                      <Unlock className="w-4 h-4 text-amber-300" />
-                      <span>Unlock Clearance</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleRestartCode}
-                      className="px-4 py-2.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.08] text-slate-300 text-xs font-semibold border border-white/[0.08] transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      <span>Restart</span>
-                    </button>
-                  </div>
-                </div>
+            /* Glassmorphism Guard: Registration Required Prompt */
+            <div className="p-8 rounded-3xl bg-white/[0.02] border border-white/[0.08] backdrop-blur-xl text-center space-y-5">
+              <div className="w-16 h-16 rounded-3xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mx-auto shadow-inner">
+                <ShieldAlert className="w-8 h-8" />
+              </div>
+              <div className="max-w-md mx-auto space-y-2">
+                <h4 className="text-lg font-bold text-white font-['Outfit']">
+                  Administrator Registration Required
+                </h4>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Only accounts registered with the <span className="text-amber-400 font-semibold font-mono">admin</span> role have clearance to access this terminal. If you are authorized, register for an admin account with your passkey or sign in to your administrator profile.
+                </p>
+              </div>
 
-                {errorMsg && (
-                  <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-500/40 text-rose-300 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
-                    <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
-                    <span>{errorMsg}</span>
-                  </div>
-                )}
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={onOpenSignup}
+                  className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-rose-600 hover:from-amber-400 hover:to-rose-500 active:scale-[0.98] text-white text-xs font-bold shadow-xl shadow-amber-950/40 border border-amber-400/30 backdrop-blur-md transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>Register as Administrator</span>
+                </button>
 
-                {successMsg && (
-                  <div className="p-3 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
-                    <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>{successMsg}</span>
-                  </div>
-                )}
-              </form>
+                <button
+                  type="button"
+                  onClick={onOpenLogin}
+                  className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] text-slate-200 hover:text-white text-xs font-semibold border border-white/[0.1] backdrop-blur-md transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <LogIn className="w-4 h-4 text-blue-400" />
+                  <span>Log In to Admin Account</span>
+                </button>
+              </div>
             </div>
           ) : (
             /* Unlocked Admin Hub */
             <>
               {/* Mode Switcher Tabs for Admin */}
-              <div className="flex items-center gap-2 border-b border-white/[0.08] pb-3">
+              <div className="flex items-center gap-2 border-b border-white/[0.08] pb-3 flex-wrap">
                 <button
                   type="button"
                   onClick={() => setAdminTab('security')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer backdrop-blur-md ${
                     adminTab === 'security'
-                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-950 border border-blue-400/30'
-                      : 'bg-white/[0.04] text-slate-400 hover:text-white hover:bg-white/[0.08]'
+                      ? 'bg-blue-600/80 text-white shadow-lg shadow-blue-950/50 border border-blue-400/40'
+                      : 'bg-white/[0.03] text-slate-400 hover:text-white hover:bg-white/[0.06] border border-white/[0.05]'
                   }`}
                 >
                   <Shield className="w-4 h-4 text-amber-300" />
@@ -211,11 +145,27 @@ export const AdminSecretTerminal: React.FC<AdminSecretTerminalProps> = ({
 
                 <button
                   type="button"
+                  onClick={() => setAdminTab('checker')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer backdrop-blur-md ${
+                    adminTab === 'checker'
+                      ? 'bg-purple-600/80 text-white shadow-lg shadow-purple-950/50 border border-purple-400/40'
+                      : 'bg-white/[0.03] text-slate-400 hover:text-white hover:bg-white/[0.06] border border-white/[0.05]'
+                  }`}
+                >
+                  <UserCheck className="w-4 h-4 text-purple-300" />
+                  <span>Account Checker</span>
+                  <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-purple-500/20 text-purple-200 border border-purple-400/30 font-bold">
+                    Direct Lookup
+                  </span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setAdminTab('games')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer backdrop-blur-md ${
                     adminTab === 'games'
-                      ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-950 border border-emerald-400/30'
-                      : 'bg-white/[0.04] text-slate-400 hover:text-white hover:bg-white/[0.08]'
+                      ? 'bg-emerald-600/80 text-white shadow-lg shadow-emerald-950/50 border border-emerald-400/40'
+                      : 'bg-white/[0.03] text-slate-400 hover:text-white hover:bg-white/[0.06] border border-white/[0.05]'
                   }`}
                 >
                   <Gamepad2 className="w-4 h-4 text-emerald-300" />
@@ -225,21 +175,23 @@ export const AdminSecretTerminal: React.FC<AdminSecretTerminalProps> = ({
 
               {/* Unlocked Admin Controls Panel */}
               {adminTab === 'security' ? (
-                <AdminAccountMonitor />
+                <AdminAccountMonitor initialTab="monitor" />
+              ) : adminTab === 'checker' ? (
+                <AdminAccountMonitor initialTab="checker" />
               ) : (
                 <div className="space-y-4 animate-in fade-in">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06]">
+                    <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] backdrop-blur-xl">
                       <div className="text-[11px] font-mono text-emerald-400 uppercase tracking-wider font-semibold">
                         Admin Status
                       </div>
                       <div className="text-sm font-bold text-white mt-1 flex items-center gap-1.5">
                         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                        Authorized Moderator
+                        Authorized Moderator (@{currentUser?.username})
                       </div>
                     </div>
 
-                    <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06]">
+                    <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] backdrop-blur-xl">
                       <div className="text-[11px] font-mono text-slate-400 uppercase tracking-wider font-semibold">
                         Live Games in Database
                       </div>
@@ -248,7 +200,7 @@ export const AdminSecretTerminal: React.FC<AdminSecretTerminalProps> = ({
                       </div>
                     </div>
 
-                    <div className="p-3.5 rounded-2xl bg-white/[0.03] border border-white/[0.06]">
+                    <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/[0.08] backdrop-blur-xl">
                       <div className="text-[11px] font-mono text-amber-400 uppercase tracking-wider font-semibold">
                         Moderation Privileges
                       </div>
@@ -258,19 +210,19 @@ export const AdminSecretTerminal: React.FC<AdminSecretTerminalProps> = ({
                     </div>
                   </div>
 
-                  <div className="p-4 rounded-2xl bg-black/40 border border-emerald-500/20 flex items-start gap-3 text-xs text-slate-300">
+                  <div className="p-4 rounded-2xl bg-white/[0.03] border border-emerald-500/25 backdrop-blur-xl flex items-start gap-3 text-xs text-slate-300">
                     <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                     <div>
                       <span className="font-bold text-emerald-300">Content Moderation Active: </span>
-                      Every game card across the arcade now features direct 
-                      <span className="inline-flex items-center gap-1 mx-1 px-1.5 py-0.5 rounded bg-rose-950/80 text-rose-300 border border-rose-500/40 text-[11px] font-semibold">
+                      Every game card across the arcade features direct 
+                      <span className="inline-flex items-center gap-1 mx-1 px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[11px] font-semibold">
                         <Trash2 className="w-3 h-3" /> Delete Inappropriate
                       </span> 
                       and 
-                      <span className="inline-flex items-center gap-1 mx-1 px-1.5 py-0.5 rounded bg-blue-950/80 text-blue-300 border border-blue-500/40 text-[11px] font-semibold">
+                      <span className="inline-flex items-center gap-1 mx-1 px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[11px] font-semibold">
                         <Edit3 className="w-3 h-3" /> Edit Game
                       </span> 
-                      buttons. You can also delete or edit any game inside the Game Player view.
+                      controls. You can also delete or edit any game inside the Game Player view.
                     </div>
                   </div>
                 </div>

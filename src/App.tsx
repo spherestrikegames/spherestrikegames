@@ -8,10 +8,13 @@ import { GamePlayer } from './components/GamePlayer';
 import { GameUploader } from './components/GameUploader';
 import { CreatedGamesSidebar } from './components/CreatedGamesSidebar';
 import { AdminSecretTerminal } from './components/AdminSecretTerminal';
-import { AdminPasswordModal } from './components/AdminPasswordModal';
+import { AuthModal } from './components/AuthModal';
+import { UserProfileModal } from './components/UserProfileModal';
 import { SphereStrikeLogo } from './components/SphereStrikeLogo';
 import { Game, GameGenre } from './types/game';
+import { User, AuthMode } from './types/user';
 import { fetchAllGames, deleteGame } from './utils/api';
+import { getCurrentUser, setCurrentUser as persistCurrentUser, logoutUser } from './utils/auth';
 import { isUserCreatedGame, removeMyCreatedGameId } from './utils/myGames';
 import { 
   Sparkles, Flame, History, SearchX, Plus, RefreshCw, 
@@ -29,35 +32,56 @@ export default function App() {
   const [selectedGame, setSelectedGame] = useState<Game | null>(null);
   const [gameToUpdate, setGameToUpdate] = useState<Game | null>(null);
 
+  // User Authentication state
+  const [currentUser, setCurrentUser] = useState<User | null>(() => getCurrentUser());
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [authMode, setAuthMode] = useState<AuthMode>('login');
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState<boolean>(false);
+
+  const handleOpenLogin = () => {
+    setAuthMode('login');
+    setIsAuthModalOpen(true);
+  };
+
+  const handleOpenSignup = () => {
+    setAuthMode('signup');
+    setIsAuthModalOpen(true);
+  };
+
+  const handleAuthSuccess = (user: User) => {
+    setCurrentUser(user);
+    persistCurrentUser(user);
+    setIsAuthModalOpen(false);
+  };
+
+  const handleLogout = () => {
+    logoutUser();
+    setCurrentUser(null);
+    setIsProfileModalOpen(false);
+    if (currentView === 'admin') {
+      setCurrentView('arcade');
+    }
+  };
+
   // Side mode: My Created Games (View and Edit Info)
   const [isCreatedGamesOpen, setIsCreatedGamesOpen] = useState<boolean>(false);
 
-  // Admin clearance state (authenticated via secret passkey)
-  const [isAdminUnlocked, setIsAdminUnlocked] = useState<boolean>(() => {
-    return localStorage.getItem('spherestrike_admin_unlocked') === 'true';
-  });
-  const [isAdminPasswordModalOpen, setIsAdminPasswordModalOpen] = useState<boolean>(false);
-
-  const isAdmin = Boolean(isAdminUnlocked);
-
-  const handleUnlockAdmin = () => {
-    setIsAdminUnlocked(true);
-    localStorage.setItem('spherestrike_admin_unlocked', 'true');
-  };
-
-  const handleLockAdmin = () => {
-    setIsAdminUnlocked(false);
-    localStorage.removeItem('spherestrike_admin_unlocked');
-    localStorage.removeItem('spherestrike_admin_passkey');
-  };
+  // Admin clearance state strictly restricted to users with the registered 'admin' role
+  const isAdmin = Boolean(currentUser && currentUser.role === 'admin' && !currentUser.isBlocked);
 
   const handleRequestAdminAccess = () => {
     if (isAdmin) {
       setCurrentView('admin');
       setSelectedGame(null);
       window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else if (!currentUser) {
+      // Direct prompt to register or login as an admin
+      setAuthMode('signup');
+      setIsAuthModalOpen(true);
     } else {
-      setIsAdminPasswordModalOpen(true);
+      setCurrentView('admin');
+      setSelectedGame(null);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
@@ -282,6 +306,10 @@ export default function App() {
         myCreatedGamesCount={myCreatedGames.length}
         isAdmin={isAdmin}
         onOpenAdminTerminal={handleRequestAdminAccess}
+        currentUser={currentUser}
+        onOpenLogin={handleOpenLogin}
+        onOpenSignup={handleOpenSignup}
+        onLogout={handleLogout}
       />
 
       {/* Main Content Area - shifts with sidebar on desktop */}
@@ -301,6 +329,11 @@ export default function App() {
           onToggleCreatedGames={() => setIsCreatedGamesOpen(!isCreatedGamesOpen)}
           myCreatedGamesCount={myCreatedGames.length}
           isAdmin={isAdmin}
+          currentUser={currentUser}
+          onOpenLogin={handleOpenLogin}
+          onOpenSignup={handleOpenSignup}
+          onLogout={handleLogout}
+          onOpenProfile={() => setIsProfileModalOpen(true)}
         />
 
         {/* Primary Page Canvas */}
@@ -468,57 +501,18 @@ export default function App() {
 
           {/* VIEW: ADMIN MODERATION (Dedicated view accessible only to authenticated admins) */}
           {currentView === 'admin' && (
-            isAdmin ? (
-              <div className="space-y-6 animate-in fade-in">
-                <AdminSecretTerminal
-                  isAdmin={isAdmin}
-                  onUnlockAdmin={handleUnlockAdmin}
-                  onLockAdmin={handleLockAdmin}
-                  totalGamesCount={games.length}
-                />
-              </div>
-            ) : (
-              <div className="p-12 rounded-3xl bg-[#0f1422] border border-amber-500/30 text-center space-y-4 max-w-xl mx-auto shadow-2xl shadow-amber-950/40">
-                <ShieldAlert className="w-12 h-12 text-amber-400 mx-auto" />
-                <h3 className="text-xl font-black text-white font-['Outfit']">
-                  Restricted Administrator Area
-                </h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  This moderation section is protected. Enter the administrator password to unlock security audits and arcade moderation.
-                </p>
-                <div className="flex items-center justify-center gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setCurrentView('arcade')}
-                    className="px-4 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 text-xs font-semibold transition-all cursor-pointer"
-                  >
-                    Return to Arcade
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsAdminPasswordModalOpen(true)}
-                    className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-rose-600 hover:from-amber-400 hover:to-rose-500 text-white text-xs font-bold transition-all cursor-pointer shadow-lg shadow-amber-950"
-                  >
-                    Enter Admin Password
-                  </button>
-                </div>
-              </div>
-            )
+            <div className="space-y-6 animate-in fade-in">
+              <AdminSecretTerminal
+                isAdmin={isAdmin}
+                totalGamesCount={games.length}
+                currentUser={currentUser}
+                onOpenSignup={handleOpenSignup}
+                onOpenLogin={handleOpenLogin}
+                onLockAdmin={handleLogout}
+              />
+            </div>
           )}
         </main>
-
-        {/* Admin Password Modal Prompt */}
-        <AdminPasswordModal
-          isOpen={isAdminPasswordModalOpen}
-          onClose={() => setIsAdminPasswordModalOpen(false)}
-          onSuccess={() => {
-            setIsAdminPasswordModalOpen(false);
-            handleUnlockAdmin();
-            setCurrentView('admin');
-            setSelectedGame(null);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
-        />
 
         {/* Side Mode: My Created Games (View & Edit Info) */}
         <CreatedGamesSidebar
@@ -535,6 +529,27 @@ export default function App() {
           }}
           onGameUpdated={handleGameUpdatedFromSide}
           onGameDeleted={handleDeleteGame}
+        />
+
+        {/* Auth Modal (Login / Sign Up) */}
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          initialMode={authMode}
+          onClose={() => setIsAuthModalOpen(false)}
+          onSuccess={handleAuthSuccess}
+        />
+
+        {/* User Profile Modal */}
+        <UserProfileModal
+          isOpen={isProfileModalOpen}
+          onClose={() => setIsProfileModalOpen(false)}
+          currentUser={currentUser}
+          allGames={games}
+          onSelectGame={(game) => {
+            setIsProfileModalOpen(false);
+            handleSelectGame(game);
+          }}
+          onLogout={handleLogout}
         />
 
         {/* Footer */}

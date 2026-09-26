@@ -3,11 +3,12 @@
     "id": "game-1790451269011-dqc7a",
     "title": "Cyber Strike 2026",
     "slug": "cyber-strike-2026-muisggwj",
-    "description": "A community-created web game.",
-    "genre": "Sci-Fi",
+    "description": "A futuristic community-created web arcade strike game.",
+    "genre": "Action",
     "tags": [
       "Community",
-      "Web"
+      "Action",
+      "Sci-Fi"
     ],
     "author": "ArcadeMaster",
     "currentVersion": "1.0.0",
@@ -15,21 +16,21 @@
       {
         "version": "1.0.0",
         "changelog": "Initial community upload.",
-        "code": "<canvas id=\"cv\"></canvas>",
+        "code": "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Cyber Strike 2026</title><style>*{box-sizing:border-box;margin:0;padding:0;user-select:none;}body{background:#060810;color:#38bdf8;font-family:system-ui,-apple-system,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;overflow:hidden;}#container{text-align:center;position:relative;}canvas{background:#0a0f1d;border:1px solid rgba(56,189,248,0.2);box-shadow:0 0 30px rgba(56,189,248,0.15);border-radius:12px;}#hud{margin-top:10px;font-size:13px;color:#94a3b8;letter-spacing:1px;}</style></head><body><div id='container'><canvas id='c' width='700' height='450'></canvas><div id='hud'>USE ARROW KEYS OR WASD TO MOVE • SPACE TO STRIKE • AVOID HAZARDS</div></div><script>const c=document.getElementById('c'),ctx=c.getContext('2d');let p={x:350,y:400,w:24,h:24,vx:0,vy:0,score:0};let orbs=[],keys={};window.onkeydown=e=>keys[e.key]=true;window.onkeyup=e=>keys[e.key]=false;function spawn(){if(Math.random()<0.04)orbs.push({x:Math.random()*660+20,y:-10,r:Math.random()*12+8,vy:Math.random()*2+1.5,hue:Math.floor(Math.random()*60)+180});}function loop(){ctx.fillStyle='rgba(6,8,16,0.25)';ctx.fillRect(0,0,c.width,c.height);if(keys['ArrowLeft']||keys['a'])p.x=Math.max(15,p.x-5);if(keys['ArrowRight']||keys['d'])p.x=Math.min(c.width-39,p.x+5);if(keys['ArrowUp']||keys['w'])p.y=Math.max(15,p.y-5);if(keys['ArrowDown']||keys['s'])p.y=Math.min(c.height-39,p.y+5);spawn();for(let i=orbs.length-1;i>=0;i--){let o=orbs[i];o.y+=o.vy;ctx.beginPath();ctx.arc(o.x,o.y,o.r,0,Math.PI*2);ctx.fillStyle='hsl('+o.hue+',90%,60%)';ctx.fill();let dx=o.x-(p.x+12),dy=o.y-(p.y+12),dist=Math.hypot(dx,dy);if(dist<o.r+14){p.score+=10;orbs.splice(i,1);continue;}if(o.y>c.height+20)orbs.splice(i,1);}ctx.fillStyle='#38bdf8';ctx.shadowColor='#38bdf8';ctx.shadowBlur=12;ctx.fillRect(p.x,p.y,p.w,p.h);ctx.shadowBlur=0;ctx.fillStyle='#ffffff';ctx.font='bold 14px monospace';ctx.fillText('SCORE: '+p.score,20,30);requestAnimationFrame(loop);}loop();</script></body></html>",
         "createdAt": "2026-09-26T19:34:29.011Z",
         "author": "ArcadeMaster"
       }
     ],
-    "code": "<canvas id=\"cv\"></canvas>",
+    "code": "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Cyber Strike 2026</title><style>*{box-sizing:border-box;margin:0;padding:0;user-select:none;}body{background:#060810;color:#38bdf8;font-family:system-ui,-apple-system,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;overflow:hidden;}#container{text-align:center;position:relative;}canvas{background:#0a0f1d;border:1px solid rgba(56,189,248,0.2);box-shadow:0 0 30px rgba(56,189,248,0.15);border-radius:12px;}#hud{margin-top:10px;font-size:13px;color:#94a3b8;letter-spacing:1px;}</style></head><body><div id='container'><canvas id='c' width='700' height='450'></canvas><div id='hud'>USE ARROW KEYS OR WASD TO MOVE • SPACE TO STRIKE • AVOID HAZARDS</div></div><script>const c=document.getElementById('c'),ctx=c.getContext('2d');let p={x:350,y:400,w:24,h:24,vx:0,vy:0,score:0};let orbs=[],keys={};window.onkeydown=e=>keys[e.key]=true;window.onkeyup=e=>keys[e.key]=false;function spawn(){if(Math.random()<0.04)orbs.push({x:Math.random()*660+20,y:-10,r:Math.random()*12+8,vy:Math.random()*2+1.5,hue:Math.floor(Math.random()*60)+180});}function loop(){ctx.fillStyle='rgba(6,8,16,0.25)';ctx.fillRect(0,0,c.width,c.height);if(keys['ArrowLeft']||keys['a'])p.x=Math.max(15,p.x-5);if(keys['ArrowRight']||keys['d'])p.x=Math.min(c.width-39,p.x+5);if(keys['ArrowUp']||keys['w'])p.y=Math.max(15,p.y-5);if(keys['ArrowDown']||keys['s'])p.y=Math.min(c.height-39,p.y+5);spawn();for(let i=orbs.length-1;i>=0;i--){let o=orbs[i];o.y+=o.vy;ctx.beginPath();ctx.arc(o.x,o.y,o.r,0,Math.PI*2);ctx.fillStyle='hsl('+o.hue+',90%,60%)';ctx.fill();let dx=o.x-(p.x+12),dy=o.y-(p.y+12),dist=Math.hypot(dx,dy);if(dist<o.r+14){p.score+=10;orbs.splice(i,1);continue;}if(o.y>c.height+20)orbs.splice(i,1);}ctx.fillStyle='#38bdf8';ctx.shadowColor='#38bdf8';ctx.shadowBlur=12;ctx.fillRect(p.x,p.y,p.w,p.h);ctx.shadowBlur=0;ctx.fillStyle='#ffffff';ctx.font='bold 14px monospace';ctx.fillText('SCORE: '+p.score,20,30);requestAnimationFrame(loop);}loop();</script></body></html>",
     "type": "html5",
-    "badge": "new",
-    "thumbnailGradient": "from-blue-950 via-slate-900 to-black",
-    "accentColor": "#3b82f6",
-    "iconName": "Gamepad2",
-    "likes": 1,
-    "plays": 0,
+    "badge": "popular",
+    "thumbnailGradient": "from-cyan-950 via-slate-900 to-black",
+    "accentColor": "#06b6d4",
+    "iconName": "Rocket",
+    "likes": 4,
+    "plays": 12,
     "rating": 5,
-    "ratingsCount": 1,
+    "ratingsCount": 3,
     "comments": [
       {
         "id": "welcome-1790451269012",
@@ -37,68 +38,21 @@
         "text": "Welcome to Cyber Strike 2026! Try it out, leave a rating, and share feedback with the developer.",
         "rating": 5,
         "createdAt": "2026-09-26T19:34:29.011Z",
-        "likes": 0
+        "likes": 1
       }
     ],
     "controls": [
       {
-        "key": "Mouse & Keyboard",
-        "action": "Standard Game Controls"
+        "key": "Arrow Keys / WASD",
+        "action": "Pilot Ship"
+      },
+      {
+        "key": "Collision",
+        "action": "Collect Energy Orbs"
       }
     ],
-    "featured": false,
+    "featured": true,
     "createdAt": "2026-09-26T19:34:29.011Z",
     "updatedAt": "2026-09-26T19:34:29.011Z"
-  },
-  {
-    "id": "game-1790450996881-7c973",
-    "title": "Test Game 1",
-    "slug": "test-game-1-muisamxd",
-    "description": "A community-created web game.",
-    "genre": "Arcade",
-    "tags": [
-      "Community",
-      "Web"
-    ],
-    "author": "TestAuthor",
-    "currentVersion": "1.0.0",
-    "versions": [
-      {
-        "version": "1.0.0",
-        "changelog": "Initial community upload.",
-        "code": "<h1>Test</h1>",
-        "createdAt": "2026-09-26T19:29:56.881Z",
-        "author": "TestAuthor"
-      }
-    ],
-    "code": "<h1>Test</h1>",
-    "type": "html5",
-    "badge": "new",
-    "thumbnailGradient": "from-blue-950 via-slate-900 to-black",
-    "accentColor": "#3b82f6",
-    "iconName": "Gamepad2",
-    "likes": 1,
-    "plays": 0,
-    "rating": 5,
-    "ratingsCount": 1,
-    "comments": [
-      {
-        "id": "welcome-1790450996881",
-        "author": "Sphere Strike System",
-        "text": "Welcome to Test Game 1! Try it out, leave a rating, and share feedback with the developer.",
-        "rating": 5,
-        "createdAt": "2026-09-26T19:29:56.881Z",
-        "likes": 0
-      }
-    ],
-    "controls": [
-      {
-        "key": "Mouse & Keyboard",
-        "action": "Standard Game Controls"
-      }
-    ],
-    "featured": false,
-    "createdAt": "2026-09-26T19:29:56.881Z",
-    "updatedAt": "2026-09-26T19:29:56.881Z"
   }
 ]
