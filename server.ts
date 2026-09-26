@@ -66,9 +66,19 @@ function saveGames() {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
-    fs.writeFileSync(DATA_FILE, JSON.stringify(games, null, 2), 'utf-8');
+    const tempFile = `${DATA_FILE}.tmp.${Date.now()}`;
+    const payload = JSON.stringify(games, null, 2);
+    fs.writeFileSync(tempFile, payload, 'utf-8');
+    fs.renameSync(tempFile, DATA_FILE);
+    console.log(`[Database: Flat File JSON] Successfully saved ${games.length} games to ${DATA_FILE}`);
   } catch (err) {
     console.error('Failed to write games to disk:', err);
+    // Fallback direct write if atomic rename had permission/cross-device issues
+    try {
+      fs.writeFileSync(DATA_FILE, JSON.stringify(games, null, 2), 'utf-8');
+    } catch (fallbackErr) {
+      console.error('Critical: Direct write fallback to games.json also failed:', fallbackErr);
+    }
   }
 }
 

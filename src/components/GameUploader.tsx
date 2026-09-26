@@ -431,11 +431,6 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!currentUser) {
-      if (onRequireAuth) onRequireAuth();
-      return;
-    }
-
     if (!title.trim()) {
       alert('Please enter a name for your game.');
       return;
@@ -462,9 +457,12 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
       preparedCode = safetyResult.preparedCode || gameCode;
     }
 
-    if (!coverImage || !coverImage.trim()) {
-      alert('Please upload your game front cover image before publishing.');
-      return;
+    // If no cover image uploaded or provided, auto-generate a stylish SVG cover
+    let effectiveCoverImage = coverImage ? coverImage.trim() : '';
+    if (!effectiveCoverImage) {
+      const escapedTitle = title.trim().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      const escapedGenre = (genre || 'Arcade').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      effectiveCoverImage = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="375" viewBox="0 0 600 375"><defs><linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%230f172a"/><stop offset="50%" stop-color="%231e293b"/><stop offset="100%" stop-color="%230284c7"/></linearGradient></defs><rect width="600" height="375" fill="url(%23bg)"/><circle cx="300" cy="140" r="48" fill="%230284c7" opacity="0.3"/><polygon points="290,120 320,140 290,160" fill="%23ffffff"/><text x="300" y="235" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" font-size="26" font-weight="900" fill="%23ffffff" text-anchor="middle">${escapedTitle}</text><rect x="230" y="260" width="140" height="24" rx="12" fill="%23000000" opacity="0.5"/><text x="300" y="276" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" font-size="11" font-weight="bold" fill="%2338bdf8" text-anchor="middle" letter-spacing="1.5">${escapedGenre.toUpperCase()}</text></svg>`;
     }
 
     setIsSubmitting(true);
@@ -489,9 +487,6 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
     const effectiveCode = effectiveEmbedUrl 
       ? `<iframe src="${effectiveEmbedUrl}" style="width:100%;height:100%;border:none;" allow="autoplay; fullscreen; gamepad" allowfullscreen></iframe>`
       : preparedCode;
-
-    // Use uploaded image, or image URL, or leave blank to use designed front page
-    const effectiveCoverImage = coverImage.trim() || undefined;
 
     try {
       if (isUpdating && initialGameToUpdate) {

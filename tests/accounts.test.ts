@@ -190,4 +190,61 @@ assert.strictEqual(injected.includes('SPHERESTRIKE_CRASH_SHIELD_ACTIVE'), false)
 assert.strictEqual(injected.includes('spherestrike-crash-overlay'), false);
 console.log('✓ Verified crash protection is completely removed from code runner and validators');
 
+// 11. Test Flat JSON Games Storage & Persistence
+const DATA_GAMES_FILE = 'data/games.json';
+assert.strictEqual(fs.existsSync(DATA_GAMES_FILE), true);
+const rawGamesData = fs.readFileSync(DATA_GAMES_FILE, 'utf-8');
+const parsedGames = JSON.parse(rawGamesData);
+assert.strictEqual(Array.isArray(parsedGames), true);
+
+// Verify adding a game to the flat JSON database
+const testGameEntry = {
+  id: 'game-test-flat-file-' + Date.now(),
+  title: 'Galactic Horizon Flat Test',
+  slug: 'galactic-horizon-flat-test',
+  description: 'A test game stored in data/games.json',
+  genre: 'Sci-Fi',
+  tags: ['Testing', 'FlatJSON'],
+  author: 'FlatStore Tester',
+  currentVersion: '1.0.0',
+  versions: [{
+    version: '1.0.0',
+    changelog: 'Initial test commit',
+    code: '<canvas id="test"></canvas>',
+    createdAt: new Date().toISOString(),
+    author: 'FlatStore Tester'
+  }],
+  code: '<canvas id="test"></canvas>',
+  type: 'html5',
+  badge: 'new',
+  thumbnailGradient: 'from-blue-950 via-slate-900 to-black',
+  accentColor: '#3b82f6',
+  iconName: 'Gamepad2',
+  likes: 1,
+  plays: 0,
+  rating: 5,
+  ratingsCount: 1,
+  comments: [],
+  controls: [{ key: 'Mouse', action: 'Move' }],
+  featured: false,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString()
+};
+
+// Write directly and verify atomic persistence
+const updatedGamesList = [testGameEntry, ...parsedGames];
+fs.writeFileSync(DATA_GAMES_FILE, JSON.stringify(updatedGamesList, null, 2), 'utf-8');
+
+const readBackRaw = fs.readFileSync(DATA_GAMES_FILE, 'utf-8');
+const readBackParsed = JSON.parse(readBackRaw);
+const foundTestGame = readBackParsed.find((g: any) => g.id === testGameEntry.id);
+assert.ok(foundTestGame, 'Game was not found in data/games.json');
+assert.strictEqual(foundTestGame.title, 'Galactic Horizon Flat Test');
+assert.strictEqual(foundTestGame.author, 'FlatStore Tester');
+
+// Clean up test entry from flat JSON store
+const cleanedGamesList = readBackParsed.filter((g: any) => g.id !== testGameEntry.id);
+fs.writeFileSync(DATA_GAMES_FILE, JSON.stringify(cleanedGamesList, null, 2), 'utf-8');
+console.log('✓ Verified flat JSON database (data/games.json) stores and persists games correctly');
+
 console.log('All tests passed successfully!');

@@ -52,11 +52,24 @@ export async function createGame(payload: Partial<Game> & { version?: string; ch
     if (res.ok) {
       const data = await res.json();
       if (data.success && data.game) {
+        // Update local cache with newly created server game
+        const cached = await fetchAllGames();
+        const updated = [data.game, ...cached.filter(g => g.id !== data.game.id)];
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
         return data.game;
       }
+    } else {
+      const errorData = await res.json().catch(() => null);
+      console.error('Server failed to create game:', errorData || res.statusText);
+      if (errorData?.message) {
+        throw new Error(errorData.message);
+      }
     }
-  } catch (e) {
-    console.warn('Server create failed, saving locally', e);
+  } catch (e: any) {
+    console.warn('Backend server create call issue, using resilient local store fallback:', e);
+    if (e.message && !e.message.includes('fetch')) {
+      throw e;
+    }
   }
 
   // Client-side fallback
@@ -135,11 +148,19 @@ export async function updateGame(
     if (res.ok) {
       const data = await res.json();
       if (data.success && data.game) {
+        const cached = await fetchAllGames();
+        const updated = cached.map(g => g.id === gameId ? data.game : g);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
         return data.game;
       }
+    } else {
+      const errData = await res.json().catch(() => null);
+      console.error('Server failed to update game:', errData || res.statusText);
+      if (errData?.message) throw new Error(errData.message);
     }
-  } catch (e) {
-    console.warn('Server update failed, saving locally', e);
+  } catch (e: any) {
+    console.warn('Server update failed, falling back locally', e);
+    if (e.message && !e.message.includes('fetch')) throw e;
   }
 
   // Local fallback

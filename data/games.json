@@ -1,1 +1,104 @@
-[]
+[
+  {
+    "id": "game-1790451269011-dqc7a",
+    "title": "Cyber Strike 2026",
+    "slug": "cyber-strike-2026-muisggwj",
+    "description": "A community-created web game.",
+    "genre": "Sci-Fi",
+    "tags": [
+      "Community",
+      "Web"
+    ],
+    "author": "ArcadeMaster",
+    "currentVersion": "1.0.0",
+    "versions": [
+      {
+        "version": "1.0.0",
+        "changelog": "Initial community upload.",
+        "code": "<canvas id=\"cv\"></canvas>",
+        "createdAt": "2026-09-26T19:34:29.011Z",
+        "author": "ArcadeMaster"
+      }
+    ],
+    "code": "<canvas id=\"cv\"></canvas>",
+    "type": "html5",
+    "badge": "new",
+    "thumbnailGradient": "from-blue-950 via-slate-900 to-black",
+    "accentColor": "#3b82f6",
+    "iconName": "Gamepad2",
+    "likes": 1,
+    "plays": 0,
+    "rating": 5,
+    "ratingsCount": 1,
+    "comments": [
+      {
+        "id": "welcome-1790451269012",
+        "author": "Sphere Strike System",
+        "text": "Welcome to Cyber Strike 2026! Try it out, leave a rating, and share feedback with the developer.",
+        "rating": 5,
+        "createdAt": "2026-09-26T19:34:29.011Z",
+        "likes": 0
+      }
+    ],
+    "controls": [
+      {
+        "key": "Mouse & Keyboard",
+        "action": "Standard Game Controls"
+      }
+    ],
+    "featured": false,
+    "createdAt": "2026-09-26T19:34:29.011Z",
+    "updatedAt": "2026-09-26T19:34:29.011Z"
+  },
+  {
+    "id": "game-1790450996881-7c973",
+    "title": "Test Game 1",
+    "slug": "test-game-1-muisamxd",
+    "description": "A community-created web game.",
+    "genre": "Arcade",
+    "tags": [
+      "Community",
+      "Web"
+    ],
+    "author": "TestAuthor",
+    "currentVersion": "1.0.0",
+    "versions": [
+      {
+        "version": "1.0.0",
+        "changelog": "Initial community upload.",
+        "code": "<h1>Test</h1>",
+        "createdAt": "2026-09-26T19:29:56.881Z",
+        "author": "TestAuthor"
+      }
+    ],
+    "code": "<h1>Test</h1>",
+    "type": "html5",
+    "badge": "new",
+    "thumbnailGradient": "from-blue-950 via-slate-900 to-black",
+    "accentColor": "#3b82f6",
+    "iconName": "Gamepad2",
+    "likes": 1,
+    "plays": 0,
+    "rating": 5,
+    "ratingsCount": 1,
+    "comments": [
+      {
+        "id": "welcome-1790450996881",
+        "author": "Sphere Strike System",
+        "text": "Welcome to Test Game 1! Try it out, leave a rating, and share feedback with the developer.",
+        "rating": 5,
+        "createdAt": "2026-09-26T19:29:56.881Z",
+        "likes": 0
+      }
+    ],
+    "controls": [
+      {
+        "key": "Mouse & Keyboard",
+        "action": "Standard Game Controls"
+      }
+    ],
+    "featured": false,
+    "createdAt": "2026-09-26T19:29:56.881Z",
+    "updatedAt": "2026-09-26T19:29:56.881Z"
+  }
+]
