@@ -7,6 +7,7 @@ import { Game, GameVersion, GameComment } from '../types/game';
 import { User } from '../types/user';
 import { GameProgress } from '../types/progress';
 import { trackGamePlay, likeGame, addComment, saveAccountDataApi } from '../utils/api';
+import { getGameFromIndexedDB } from '../utils/gameStorageDb';
 import { 
   getUserGameProgress, saveUserGameProgress, recordHighScore, 
   recordGameSessionPlay, setGuestSessionProgress 
@@ -134,16 +135,29 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     setTimeout(() => setSaveToast(''), 3500);
   };
 
-  // Sync game code when version is changed
+  // Sync game code when version is changed or from IndexedDB vault
   useEffect(() => {
-    const versionObj = game.versions.find(v => v.version === selectedVersion);
-    if (versionObj) {
-      setActiveCode(versionObj.code);
-      setActiveChangelog(versionObj.changelog);
+    let isCancelled = false;
+    const versionObj = game.versions?.find(v => v.version === selectedVersion);
+    const candidateCode = versionObj ? versionObj.code : game.code;
+
+    if (candidateCode) {
+      setActiveCode(candidateCode);
+      setActiveChangelog(versionObj ? versionObj.changelog : '');
     } else {
-      setActiveCode(game.code);
-      setActiveChangelog('');
+      // Check high capacity IndexedDB vault if code was stored separately
+      getGameFromIndexedDB(game.id).then(idbGame => {
+        if (!isCancelled && idbGame) {
+          const idbVer = idbGame.versions?.find(v => v.version === selectedVersion);
+          setActiveCode(idbVer?.code || idbGame.code || '');
+          setActiveChangelog(idbVer?.changelog || '');
+        }
+      });
     }
+
+    return () => {
+      isCancelled = true;
+    };
   }, [selectedVersion, game]);
 
   // Track play count on mount

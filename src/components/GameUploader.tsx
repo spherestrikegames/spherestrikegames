@@ -397,9 +397,10 @@ export const GameUploader: React.FC<GameUploaderProps> = ({
         if (!description) {
           setDescription('Playable browser game generated in Sphere Strike Sandbox.');
         }
+        const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
         setPreviewTab('sandbox');
         setPreviewKey(prev => prev + 1);
-        setSandboxGeneratedMsg(`⚡ "${file.name}" uploaded and generated in Sandbox!`);
+        setSandboxGeneratedMsg(`⚡ "${file.name}" (${sizeMb} MB) uploaded & loaded into high-capacity vault!`);
       }
     };
     reader.readAsText(file);

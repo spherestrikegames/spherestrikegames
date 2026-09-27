@@ -317,4 +317,9 @@ assert.strictEqual(typeof SUPABASE_ANON_KEY, 'string');
 assert.strictEqual(isSupabaseConfigured(), false); // False by default until placeholder is replaced
 console.log('✓ Verified Supabase configuration variables & placeholder detection');
 
+// 16. Test High-Capacity Large Game Storage Engine
+const serverSource = fs.readFileSync('server.ts', 'utf-8');
+assert.ok(serverSource.includes("limit: '100mb'"), 'Server must accept up to 100mb payloads');
+console.log('✓ Verified 100MB payload limit is active on Express server for large games');
+
 console.log('All tests passed successfully!');

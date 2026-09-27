@@ -25,9 +25,9 @@ const ai = new GoogleGenAI({
   }
 });
 
-// Allow large game uploads (HTML/Canvas bundles up to 25MB)
-app.use(express.json({ limit: '25mb' }));
-app.use(express.urlencoded({ extended: true, limit: '25mb' }));
+// Allow large game uploads (HTML/Canvas bundles up to 100MB)
+app.use(express.json({ limit: '100mb' }));
+app.use(express.urlencoded({ extended: true, limit: '100mb' }));
 
 // In-memory store with disk persistence fallback
 const DATA_DIR = path.resolve(__dirname, 'data');

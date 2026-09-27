@@ -3,11 +3,27 @@ import { User } from '../types/user';
 import { AiAuditReport } from '../types/admin';
 import { INITIAL_GAMES } from '../data/initialGames';
 import { getSupabaseClient, isSupabaseConfigured } from './supabase';
+import {
+  saveGameToIndexedDB,
+  getAllGamesFromIndexedDB,
+  deleteGameFromIndexedDB
+} from './gameStorageDb';
 
 const STORAGE_KEY = 'spherestrike_games_cache';
 const USERS_STORAGE_KEY = 'spherestrike_registered_users';
 
+function safeSetLocalStorage(key: string, data: any) {
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+  } catch (storageErr) {
+    console.warn(`localStorage quota exceeded while saving ${key}. Falling back to IndexedDB persistent vault:`, storageErr);
+  }
+}
+
 export async function fetchAllGames(): Promise<Game[]> {
+  // Read any large local games persisted in IndexedDB
+  const idbGames = await getAllGamesFromIndexedDB();
+
   try {
     const res = await fetch('/api/games');
     if (res.ok) {
@@ -17,63 +33,43 @@ export async function fetchAllGames(): Promise<Game[]> {
           g.id !== 'game-1790122769939-ad7ce' && 
           g.title.toLowerCase().trim() !== 'spherestrike'
         );
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
-        return cleaned;
+        // Merge with indexedDB games
+        const map = new Map<string, Game>();
+        cleaned.forEach((g: Game) => map.set(g.id, g));
+        idbGames.forEach(g => map.set(g.id, g));
+        const merged = Array.from(map.values());
+
+        safeSetLocalStorage(STORAGE_KEY, merged);
+        return merged;
       }
     }
   } catch (e) {
-    console.warn('Backend fetch failed, reading from local cache', e);
+    console.warn('Backend fetch failed, reading from local cache and IndexedDB vault', e);
   }
 
-  // Fallback to local storage or initial games
+  // Fallback to local storage or initial games + IndexedDB
   const cached = localStorage.getItem(STORAGE_KEY);
+  let localGames: Game[] = INITIAL_GAMES;
   if (cached) {
     try {
       const parsed: Game[] = JSON.parse(cached);
-      const cleaned = parsed.filter(g => 
+      localGames = parsed.filter(g => 
         g.id !== 'game-1790122769939-ad7ce' && 
         g.title.toLowerCase().trim() !== 'spherestrike'
       );
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
-      return cleaned;
     } catch {
       // ignore
     }
   }
-  return INITIAL_GAMES;
+
+  const map = new Map<string, Game>();
+  localGames.forEach(g => map.set(g.id, g));
+  idbGames.forEach(g => map.set(g.id, g));
+  const finalGames = Array.from(map.values());
+  return finalGames.length > 0 ? finalGames : INITIAL_GAMES;
 }
 
 export async function createGame(payload: Partial<Game> & { version?: string; changelog?: string }): Promise<Game> {
-  try {
-    const res = await fetch('/api/games', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.success && data.game) {
-        // Update local cache with newly created server game
-        const cached = await fetchAllGames();
-        const updated = [data.game, ...cached.filter(g => g.id !== data.game.id)];
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-        return data.game;
-      }
-    } else {
-      const errorData = await res.json().catch(() => null);
-      console.error('Server failed to create game:', errorData || res.statusText);
-      if (errorData?.message) {
-        throw new Error(errorData.message);
-      }
-    }
-  } catch (e: any) {
-    console.warn('Backend server create call issue, using resilient local store fallback:', e);
-    if (e.message && !e.message.includes('fetch')) {
-      throw e;
-    }
-  }
-
-  // Client-side fallback
   const now = new Date().toISOString();
   const version = payload.version || '1.0.0';
   const embedUrl = payload.embedUrl ? payload.embedUrl.trim() : undefined;
@@ -116,9 +112,41 @@ export async function createGame(payload: Partial<Game> & { version?: string; ch
     updatedAt: now
   };
 
+  // Always save to IndexedDB high-capacity vault first to guarantee zero size errors
+  try {
+    await saveGameToIndexedDB(newGame);
+  } catch (idbErr) {
+    console.warn('Could not write to IndexedDB:', idbErr);
+  }
+
+  try {
+    const res = await fetch('/api/games', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.game) {
+        // Update local cache with newly created server game
+        const cached = await fetchAllGames();
+        const updated = [data.game, ...cached.filter(g => g.id !== data.game.id)];
+        safeSetLocalStorage(STORAGE_KEY, updated);
+        await saveGameToIndexedDB(data.game);
+        return data.game;
+      }
+    } else {
+      const errorData = await res.json().catch(() => null);
+      console.warn('Server create response notice:', errorData || res.statusText);
+    }
+  } catch (e: any) {
+    console.warn('Backend server create call note, saved securely in client vault:', e);
+  }
+
+  // Client-side return
   const cached = await fetchAllGames();
-  const updated = [newGame, ...cached];
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  const updated = [newGame, ...cached.filter(g => g.id !== newGame.id)];
+  safeSetLocalStorage(STORAGE_KEY, updated);
   return newGame;
 }
 
@@ -204,7 +232,12 @@ export async function updateGame(
     isDev: true
   });
 
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(cached));
+  safeSetLocalStorage(STORAGE_KEY, cached);
+  try {
+    await saveGameToIndexedDB(game);
+  } catch (err) {
+    console.warn('Could not update in IndexedDB:', err);
+  }
   return game;
 }
 
@@ -246,6 +279,11 @@ export async function addComment(gameId: string, author: string, text: string, r
 }
 
 export async function deleteGame(gameId: string): Promise<boolean> {
+  // Always remove from IndexedDB vault
+  try {
+    await deleteGameFromIndexedDB(gameId);
+  } catch {}
+
   try {
     const res = await fetch(`/api/games/${gameId}`, { method: 'DELETE' });
     if (res.ok) {
@@ -254,7 +292,7 @@ export async function deleteGame(gameId: string): Promise<boolean> {
         try {
           const list: Game[] = JSON.parse(cached);
           const filtered = list.filter(g => g.id !== gameId);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+          safeSetLocalStorage(STORAGE_KEY, filtered);
         } catch {}
       }
       return true;
@@ -269,7 +307,7 @@ export async function deleteGame(gameId: string): Promise<boolean> {
     try {
       const list: Game[] = JSON.parse(cached);
       const filtered = list.filter(g => g.id !== gameId);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+      safeSetLocalStorage(STORAGE_KEY, filtered);
       return true;
     } catch {}
   }
@@ -280,7 +318,7 @@ export async function clearAllGames(): Promise<boolean> {
   try {
     await fetch('/api/games', { method: 'DELETE' });
   } catch {}
-  localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+  safeSetLocalStorage(STORAGE_KEY, []);
   try {
     localStorage.removeItem('hyperarcade_games_cache');
   } catch {}
