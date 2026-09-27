@@ -2,6 +2,7 @@ import { Game, GameComment } from '../types/game';
 import { User } from '../types/user';
 import { AiAuditReport } from '../types/admin';
 import { INITIAL_GAMES } from '../data/initialGames';
+import { getSupabaseClient, isSupabaseConfigured } from './supabase';
 
 const STORAGE_KEY = 'spherestrike_games_cache';
 const USERS_STORAGE_KEY = 'spherestrike_registered_users';
@@ -513,6 +514,63 @@ export async function registerAccountApi(
   adminPasskey?: string,
   makeAdmin?: boolean
 ): Promise<User> {
+  // 1. Supabase Authentication flow (used for GitHub Pages and Cloud deployments)
+  const supabase = getSupabaseClient();
+  if (isSupabaseConfigured() && supabase) {
+    try {
+      const validPasskeys = ['rishi_admin', 'goyal.rishi', 'macbookair'];
+      const isAdmin = Boolean(makeAdmin || (adminPasskey && validPasskeys.includes(adminPasskey.trim())));
+
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password: password,
+        options: {
+          data: {
+            username: username.trim(),
+            role: isAdmin ? 'admin' : 'user',
+            isAdmin: isAdmin
+          }
+        }
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (data?.user) {
+        const supaUser: User = {
+          id: data.user.id,
+          username: username.trim(),
+          email: data.user.email || email.trim(),
+          role: isAdmin ? 'admin' : 'user',
+          isAdmin: isAdmin,
+          joinedAt: data.user.created_at || new Date().toISOString(),
+          lastLoginAt: new Date().toISOString(),
+          highScores: {},
+          savedProgress: {},
+          favoriteGameIds: [],
+          createdGameIds: [],
+          gamesPlayed: 0,
+          isBlocked: false
+        };
+
+        // Cache in browser storage so progress and session are instantly accessible
+        const rawUsers = localStorage.getItem(USERS_STORAGE_KEY);
+        const users: User[] = rawUsers ? JSON.parse(rawUsers) : [];
+        if (!users.some(u => u.id === supaUser.id || u.username.toLowerCase() === supaUser.username.toLowerCase())) {
+          users.push(supaUser);
+          localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+        }
+
+        return supaUser;
+      }
+    } catch (supaErr: any) {
+      console.warn('Supabase auth sign up error:', supaErr);
+      throw supaErr;
+    }
+  }
+
+  // 2. Full-stack backend fetch attempt (if backend server is active)
   let res: Response | null = null;
   try {
     res = await fetch('/api/auth/register', {
@@ -525,53 +583,46 @@ export async function registerAccountApi(
       return data.user;
     }
   } catch (netErr: any) {
-    if (netErr?.status && netErr?.status !== 404 && netErr?.status !== 502) {
-      throw netErr;
-    }
+    // If backend is unreachable or static hosting, proceed to client fallback
   }
 
-  // Fallback for static hosting (e.g. GitHub Pages) where /api/auth/* returns 404
-  if (!res || res.status === 404 || res.status === 502 || res.status === 503) {
-    const rawUsers = localStorage.getItem(USERS_STORAGE_KEY);
-    const users: User[] = rawUsers ? JSON.parse(rawUsers) : [];
+  // 3. Fallback for static hosting (e.g. GitHub Pages) without backend
+  const rawUsers = localStorage.getItem(USERS_STORAGE_KEY);
+  const users: User[] = rawUsers ? JSON.parse(rawUsers) : [];
 
-    const normUsername = username.trim().toLowerCase();
-    const normEmail = email.trim().toLowerCase();
+  const normUsername = username.trim().toLowerCase();
+  const normEmail = email.trim().toLowerCase();
 
-    if (users.some(u => u.username.toLowerCase() === normUsername)) {
-      throw new Error('Username is already taken');
-    }
-    if (users.some(u => u.email.toLowerCase() === normEmail)) {
-      throw new Error('Email is already registered');
-    }
-
-    const validPasskeys = ['rishi_admin', 'goyal.rishi', 'macbookair'];
-    const isAdmin = Boolean(makeAdmin || (adminPasskey && validPasskeys.includes(adminPasskey.trim())));
-
-    const newUser: User = {
-      id: 'u-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
-      username: username.trim(),
-      email: email.trim().toLowerCase(),
-      password: password,
-      role: isAdmin ? 'admin' : 'user',
-      isAdmin: isAdmin,
-      joinedAt: new Date().toISOString(),
-      lastLoginAt: new Date().toISOString(),
-      highScores: {},
-      savedProgress: {},
-      favoriteGameIds: [],
-      createdGameIds: [],
-      gamesPlayed: 0,
-      isBlocked: false
-    };
-
-    users.push(newUser);
-    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
-    return newUser;
+  if (users.some(u => u.username.toLowerCase() === normUsername)) {
+    throw new Error('Username is already taken');
+  }
+  if (users.some(u => u.email.toLowerCase() === normEmail)) {
+    throw new Error('Email is already registered');
   }
 
-  const data = await safeParseResponse(res, 'Registration failed. Please check your credentials.');
-  return data.user;
+  const validPasskeys = ['rishi_admin', 'goyal.rishi', 'macbookair'];
+  const isAdmin = Boolean(makeAdmin || (adminPasskey && validPasskeys.includes(adminPasskey.trim())));
+
+  const newUser: User = {
+    id: 'u-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
+    username: username.trim(),
+    email: email.trim().toLowerCase(),
+    password: password,
+    role: isAdmin ? 'admin' : 'user',
+    isAdmin: isAdmin,
+    joinedAt: new Date().toISOString(),
+    lastLoginAt: new Date().toISOString(),
+    highScores: {},
+    savedProgress: {},
+    favoriteGameIds: [],
+    createdGameIds: [],
+    gamesPlayed: 0,
+    isBlocked: false
+  };
+
+  users.push(newUser);
+  localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+  return newUser;
 }
 
 export async function deleteUserAccountApi(userId: string): Promise<boolean> {
@@ -647,6 +698,62 @@ export async function resetAllAccountsApi(): Promise<{ success: boolean; message
 }
 
 export async function loginAccountApi(identifier: string, password: string): Promise<User> {
+  // 1. Supabase Authentication flow (used for GitHub Pages and Cloud deployments)
+  const supabase = getSupabaseClient();
+  if (isSupabaseConfigured() && supabase) {
+    try {
+      const email = identifier.includes('@') 
+        ? identifier.trim()
+        : `${identifier.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '')}@player.local`;
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (data?.user) {
+        const metadata = data.user.user_metadata || {};
+        const isAdmin = Boolean(metadata.role === 'admin' || metadata.isAdmin);
+        const supaUser: User = {
+          id: data.user.id,
+          username: metadata.username || identifier.trim(),
+          email: data.user.email || email,
+          role: isAdmin ? 'admin' : 'user',
+          isAdmin: isAdmin,
+          joinedAt: data.user.created_at || new Date().toISOString(),
+          lastLoginAt: new Date().toISOString(),
+          highScores: {},
+          savedProgress: {},
+          favoriteGameIds: [],
+          createdGameIds: [],
+          gamesPlayed: 0,
+          isBlocked: false
+        };
+
+        // Cache in browser storage
+        const rawUsers = localStorage.getItem(USERS_STORAGE_KEY);
+        const users: User[] = rawUsers ? JSON.parse(rawUsers) : [];
+        const existingIdx = users.findIndex(u => u.id === supaUser.id || u.username.toLowerCase() === supaUser.username.toLowerCase());
+        if (existingIdx !== -1) {
+          users[existingIdx] = { ...users[existingIdx], ...supaUser, lastLoginAt: new Date().toISOString() };
+        } else {
+          users.push(supaUser);
+        }
+        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+
+        return supaUser;
+      }
+    } catch (supaErr: any) {
+      console.warn('Supabase auth sign in error:', supaErr);
+      throw supaErr;
+    }
+  }
+
+  // 2. Full-stack backend fetch attempt (if backend server is active)
   let res: Response | null = null;
   try {
     res = await fetch('/api/auth/login', {
@@ -659,59 +766,52 @@ export async function loginAccountApi(identifier: string, password: string): Pro
       return data.user;
     }
   } catch (netErr: any) {
-    if (netErr?.status && netErr?.status !== 404 && netErr?.status !== 502) {
-      throw netErr;
-    }
+    // If backend is unreachable or static hosting, proceed to client fallback
   }
 
-  // Fallback for static hosting (e.g. GitHub Pages) where /api/auth/* returns 404
-  if (!res || res.status === 404 || res.status === 502 || res.status === 503) {
-    const rawUsers = localStorage.getItem(USERS_STORAGE_KEY);
-    const users: User[] = rawUsers ? JSON.parse(rawUsers) : [];
-    const normId = identifier.trim().toLowerCase();
+  // 3. Fallback for static hosting (e.g. GitHub Pages) where /api/auth/* returns 404
+  const rawUsers = localStorage.getItem(USERS_STORAGE_KEY);
+  const users: User[] = rawUsers ? JSON.parse(rawUsers) : [];
+  const normId = identifier.trim().toLowerCase();
 
-    const match = users.find(u => u.username.toLowerCase() === normId || u.email.toLowerCase() === normId);
-    if (match) {
-      if (match.isBlocked) {
-        throw new Error(`Account blocked: ${match.blockedReason || 'Policy violation'}`);
-      }
-      const validPasskeys = ['rishi_admin', 'goyal.rishi', 'macbookair'];
-      if (match.password === password || (match.isAdmin && validPasskeys.includes(password))) {
-        match.lastLoginAt = new Date().toISOString();
-        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
-        return match;
-      }
+  const match = users.find(u => u.username.toLowerCase() === normId || u.email.toLowerCase() === normId);
+  if (match) {
+    if (match.isBlocked) {
+      throw new Error(`Account blocked: ${match.blockedReason || 'Policy violation'}`);
     }
-
-    // Auto-provision admin user for owner passkeys/emails when running on static hosting
     const validPasskeys = ['rishi_admin', 'goyal.rishi', 'macbookair'];
-    if (validPasskeys.includes(password) || normId === 'rishi.p1.goyal@gmail.com' || normId === 'admin' || normId === 'rishi_admin') {
-      const adminUser: User = {
-        id: 'u-admin-local-' + Date.now(),
-        username: normId === 'rishi.p1.goyal@gmail.com' ? 'Rishi Goyal' : (identifier.trim() || 'Admin'),
-        email: normId.includes('@') ? normId : 'rishi.p1.goyal@gmail.com',
-        password: password,
-        role: 'admin',
-        isAdmin: true,
-        joinedAt: new Date().toISOString(),
-        lastLoginAt: new Date().toISOString(),
-        highScores: {},
-        savedProgress: {},
-        favoriteGameIds: [],
-        createdGameIds: [],
-        gamesPlayed: 0,
-        isBlocked: false
-      };
-      users.push(adminUser);
+    if (match.password === password || (match.isAdmin && validPasskeys.includes(password))) {
+      match.lastLoginAt = new Date().toISOString();
       localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
-      return adminUser;
+      return match;
     }
-
-    throw new Error('Invalid username/email or password.');
   }
 
-  const data = await safeParseResponse(res, 'Login failed. Please check your credentials.');
-  return data.user;
+  // Auto-provision admin user for owner passkeys/emails when running on static hosting
+  const validPasskeys = ['rishi_admin', 'goyal.rishi', 'macbookair'];
+  if (validPasskeys.includes(password) || normId === 'rishi.p1.goyal@gmail.com' || normId === 'admin' || normId === 'rishi_admin') {
+    const adminUser: User = {
+      id: 'u-admin-local-' + Date.now(),
+      username: normId === 'rishi.p1.goyal@gmail.com' ? 'Rishi Goyal' : (identifier.trim() || 'Admin'),
+      email: normId.includes('@') ? normId : 'rishi.p1.goyal@gmail.com',
+      password: password,
+      role: 'admin',
+      isAdmin: true,
+      joinedAt: new Date().toISOString(),
+      lastLoginAt: new Date().toISOString(),
+      highScores: {},
+      savedProgress: {},
+      favoriteGameIds: [],
+      createdGameIds: [],
+      gamesPlayed: 0,
+      isBlocked: false
+    };
+    users.push(adminUser);
+    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+    return adminUser;
+  }
+
+  throw new Error('Invalid username/email or password.');
 }
 
 export async function saveAccountDataApi(userId: string, accountData: {

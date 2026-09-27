@@ -1,5 +1,6 @@
 import assert from 'node:assert';
 import fs from 'node:fs';
+import { isSupabaseConfigured, SUPABASE_URL, SUPABASE_ANON_KEY } from '../src/utils/supabase';
 
 console.log('--- Testing AI Account Identification & On-Demand Registration ---');
 
@@ -309,5 +310,11 @@ assert.strictEqual(checkAdminAccess({ role: 'user', isBlocked: false }), false, 
 assert.strictEqual(checkAdminAccess({ role: 'admin', isBlocked: true }), false, 'Blocked admin should not have admin clearance');
 assert.strictEqual(checkAdminAccess({ role: 'admin', isBlocked: false }), true, 'Registered unblocked admin should have admin clearance');
 console.log('✓ Verified admin panel is restricted strictly to registered admin accounts');
+
+// 15. Test Supabase Integration and GitHub Pages Static Fallback
+assert.strictEqual(typeof SUPABASE_URL, 'string');
+assert.strictEqual(typeof SUPABASE_ANON_KEY, 'string');
+assert.strictEqual(isSupabaseConfigured(), false); // False by default until placeholder is replaced
+console.log('✓ Verified Supabase configuration variables & placeholder detection');
 
 console.log('All tests passed successfully!');
