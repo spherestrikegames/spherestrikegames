@@ -12,6 +12,42 @@ import {
 const STORAGE_KEY = 'spherestrike_games_cache';
 const USERS_STORAGE_KEY = 'spherestrike_registered_users';
 
+export const GLOBAL_BACKEND_URLS = [
+  'https://ais-pre-aqdtbuwzygrgsuquo37qus-681998106252.us-west2.run.app',
+  'https://ais-dev-aqdtbuwzygrgsuquo37qus-681998106252.us-west2.run.app'
+];
+
+/**
+ * Fetches from relative /api/* first; if running on a static host (e.g., GitHub Pages)
+ * where relative /api/* returns 404/HTML, automatically routes to the global Cloud Run backend.
+ */
+export async function globalApiFetch(endpoint: string, options?: RequestInit): Promise<Response> {
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+
+  try {
+    const localRes = await fetch(cleanEndpoint, options);
+    const contentType = localRes.headers.get('content-type') || '';
+    if (localRes.ok || (localRes.status !== 404 && contentType.includes('application/json'))) {
+      return localRes;
+    }
+  } catch {
+    // Proceed to global backend fallback
+  }
+
+  for (const baseUrl of GLOBAL_BACKEND_URLS) {
+    try {
+      const globalRes = await fetch(`${baseUrl}${cleanEndpoint}`, options);
+      if (globalRes.ok || globalRes.status < 500) {
+        return globalRes;
+      }
+    } catch {
+      // Try next global backend URL
+    }
+  }
+
+  return fetch(cleanEndpoint, options);
+}
+
 function safeSetLocalStorage(key: string, data: any) {
   try {
     localStorage.setItem(key, JSON.stringify(data));
@@ -20,22 +56,151 @@ function safeSetLocalStorage(key: string, data: any) {
   }
 }
 
+export function mapSupabaseRowToGame(row: any): Game {
+  const base: Partial<Game> = (row && typeof row.game_data === 'object' && row.game_data !== null) ? row.game_data : {};
+  const now = new Date().toISOString();
+  const title = row?.title || base.title || 'Untitled Game';
+  const code = row?.code ?? base.code ?? '';
+  const embedUrl = row?.embed_url ?? base.embedUrl ?? undefined;
+  return {
+    id: row?.id || base.id || 'game-' + Date.now(),
+    title,
+    slug: row?.slug || base.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+    description: row?.description || base.description || 'Community web game.',
+    genre: (row?.genre || base.genre || 'Arcade') as any,
+    tags: Array.isArray(base.tags) ? base.tags : ['Indie', 'HTML5'],
+    author: row?.author || base.author || 'Sphere Creator',
+    currentVersion: base.currentVersion || '1.0.0',
+    versions: Array.isArray(base.versions) && base.versions.length > 0
+      ? base.versions
+      : [{
+          version: base.currentVersion || '1.0.0',
+          changelog: 'Published on community arcade.',
+          code,
+          createdAt: row?.created_at || base.createdAt || now,
+          author: row?.author || base.author || 'Sphere Creator'
+        }],
+    code,
+    type: (row?.type || base.type || (embedUrl ? 'embed' : 'html5')) as 'html5' | 'embed',
+    embedUrl,
+    coverImage: row?.cover_image ?? base.coverImage,
+    badge: base.badge || 'new',
+    thumbnailGradient: base.thumbnailGradient || 'from-blue-950 via-slate-900 to-black',
+    accentColor: base.accentColor || '#3b82f6',
+    iconName: base.iconName || 'Gamepad2',
+    likes: typeof base.likes === 'number' ? base.likes : 1,
+    plays: typeof base.plays === 'number' ? base.plays : 0,
+    rating: typeof base.rating === 'number' ? base.rating : 5.0,
+    ratingsCount: typeof base.ratingsCount === 'number' ? base.ratingsCount : 1,
+    comments: Array.isArray(base.comments) ? base.comments : [],
+    controls: Array.isArray(base.controls) ? base.controls : [{ key: 'Mouse / Keys', action: 'Play Game' }],
+    createdAt: row?.created_at || base.createdAt || now,
+    updatedAt: row?.updated_at || base.updatedAt || now
+  };
+}
+
+export function mapGameToSupabaseRow(game: Game) {
+  return {
+    id: game.id,
+    title: game.title,
+    slug: game.slug,
+    description: game.description,
+    genre: game.genre,
+    author: game.author,
+    code: game.code,
+    type: game.type || 'html5',
+    embed_url: game.embedUrl || null,
+    cover_image: game.coverImage || null,
+    game_data: game,
+    created_at: game.createdAt,
+    updated_at: game.updatedAt
+  };
+}
+
 export async function fetchAllGames(): Promise<Game[]> {
   // Read any large local games persisted in IndexedDB
   const idbGames = await getAllGamesFromIndexedDB();
 
-  try {
-    const res = await fetch('/api/games');
-    if (res.ok) {
-      const data = await res.json();
-      if (data.success && Array.isArray(data.games)) {
-        const cleaned = data.games.filter((g: Game) => 
+  // Also read any games currently in localStorage cache
+  let cachedLocalGames: Game[] = [];
+  const rawCached = localStorage.getItem(STORAGE_KEY);
+  if (rawCached) {
+    try {
+      const parsed: Game[] = JSON.parse(rawCached);
+      if (Array.isArray(parsed)) {
+        cachedLocalGames = parsed.filter(g => 
           g.id !== 'game-1790122769939-ad7ce' && 
           g.title.toLowerCase().trim() !== 'spherestrike'
         );
-        // Merge with indexedDB games
+      }
+    } catch {}
+  }
+
+  // 1. Fetch shared games from Supabase if configured
+  let supabaseGames: Game[] = [];
+  const supabase = getSupabaseClient();
+  if (isSupabaseConfigured() && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('games')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!error && Array.isArray(data)) {
+        supabaseGames = data
+          .map(row => mapSupabaseRowToGame(row))
+          .filter(g => g.id !== 'game-1790122769939-ad7ce' && g.title.toLowerCase().trim() !== 'spherestrike');
+      } else if (error) {
+        console.warn('Supabase games fetch error:', error.message);
+      }
+    } catch (supaErr) {
+      console.warn('Failed to fetch games from Supabase:', supaErr);
+    }
+  }
+
+  try {
+    const res = await globalApiFetch('/api/games');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.games)) {
+        const cleaned: Game[] = data.games.filter((g: Game) => 
+          g.id !== 'game-1790122769939-ad7ce' && 
+          g.title.toLowerCase().trim() !== 'spherestrike'
+        );
+
+        // Identify any games in this browser's local storage or IndexedDB that aren't on the global server yet
+        const serverIds = new Set(cleaned.map(g => g.id));
+        const serverTitleAuthors = new Set(
+          cleaned.map(g => `${g.title.trim().toLowerCase()}::${g.author.trim().toLowerCase()}`)
+        );
+
+        const localCandidatesMap = new Map<string, Game>();
+        cachedLocalGames.forEach(g => localCandidatesMap.set(g.id, g));
+        idbGames.forEach(g => localCandidatesMap.set(g.id, g));
+
+        const unsyncedLocalGames = Array.from(localCandidatesMap.values()).filter(g => {
+          const key = `${g.title.trim().toLowerCase()}::${g.author.trim().toLowerCase()}`;
+          return !serverIds.has(g.id) && !serverTitleAuthors.has(key);
+        });
+
+        // Automatically push unsynced browser games up to the global server so all devices worldwide see them
+        if (unsyncedLocalGames.length > 0) {
+          for (const localGame of unsyncedLocalGames) {
+            try {
+              await globalApiFetch('/api/games', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(localGame)
+              });
+            } catch (syncErr) {
+              console.warn('Auto-sync local game to global server notice:', syncErr);
+            }
+          }
+        }
+
+        // Merge server games, Supabase cloud games, and IndexedDB games
         const map = new Map<string, Game>();
         cleaned.forEach((g: Game) => map.set(g.id, g));
+        supabaseGames.forEach((g: Game) => map.set(g.id, g));
         idbGames.forEach(g => map.set(g.id, g));
         const merged = Array.from(map.values());
 
@@ -44,26 +209,15 @@ export async function fetchAllGames(): Promise<Game[]> {
       }
     }
   } catch (e) {
-    console.warn('Backend fetch failed, reading from local cache and IndexedDB vault', e);
+    console.warn('Backend fetch failed, reading from Supabase, local cache, and IndexedDB vault', e);
   }
 
-  // Fallback to local storage or initial games + IndexedDB
-  const cached = localStorage.getItem(STORAGE_KEY);
-  let localGames: Game[] = INITIAL_GAMES;
-  if (cached) {
-    try {
-      const parsed: Game[] = JSON.parse(cached);
-      localGames = parsed.filter(g => 
-        g.id !== 'game-1790122769939-ad7ce' && 
-        g.title.toLowerCase().trim() !== 'spherestrike'
-      );
-    } catch {
-      // ignore
-    }
-  }
+  // Fallback to local storage or initial games + Supabase + IndexedDB
+  const localGames: Game[] = cachedLocalGames.length > 0 ? cachedLocalGames : INITIAL_GAMES;
 
   const map = new Map<string, Game>();
   localGames.forEach(g => map.set(g.id, g));
+  supabaseGames.forEach(g => map.set(g.id, g));
   idbGames.forEach(g => map.set(g.id, g));
   const finalGames = Array.from(map.values());
   return finalGames.length > 0 ? finalGames : INITIAL_GAMES;
@@ -77,7 +231,7 @@ export async function createGame(payload: Partial<Game> & { version?: string; ch
   const gameType = embedUrl ? 'embed' : (payload.type || 'html5');
 
   const newGame: Game = {
-    id: 'game-' + Date.now(),
+    id: payload.id || ('game-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7)),
     title: payload.title || 'Untitled Game',
     slug: (payload.title || 'game').toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + Date.now().toString(36),
     description: payload.description || 'Community web game.',
@@ -119,15 +273,38 @@ export async function createGame(payload: Partial<Game> & { version?: string; ch
     console.warn('Could not write to IndexedDB:', idbErr);
   }
 
+  // Publish to shared Supabase games table if configured so all browsers see the game
+  const supabase = getSupabaseClient();
+  if (isSupabaseConfigured() && supabase) {
+    try {
+      const { error } = await supabase
+        .from('games')
+        .upsert(mapGameToSupabaseRow(newGame), { onConflict: 'id' });
+      if (error) {
+        console.warn('Supabase games insert notice:', error.message);
+      }
+    } catch (supaErr) {
+      console.warn('Could not sync new game to Supabase:', supaErr);
+    }
+  }
+
   try {
-    const res = await fetch('/api/games', {
+    const res = await globalApiFetch('/api/games', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ ...newGame, ...payload, id: newGame.id })
     });
     if (res.ok) {
       const data = await res.json();
       if (data.success && data.game) {
+        // Also ensure Supabase has the canonical server game ID if Supabase is active
+        if (isSupabaseConfigured() && supabase) {
+          try {
+            await supabase
+              .from('games')
+              .upsert(mapGameToSupabaseRow(data.game), { onConflict: 'id' });
+          } catch {}
+        }
         // Update local cache with newly created server game
         const cached = await fetchAllGames();
         const updated = [data.game, ...cached.filter(g => g.id !== data.game.id)];
@@ -168,8 +345,9 @@ export async function updateGame(
     controls?: { key: string; action: string }[];
   }
 ): Promise<Game> {
+  const supabase = getSupabaseClient();
   try {
-    const res = await fetch(`/api/games/${gameId}`, {
+    const res = await globalApiFetch(`/api/games/${gameId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -177,9 +355,14 @@ export async function updateGame(
     if (res.ok) {
       const data = await res.json();
       if (data.success && data.game) {
+        if (isSupabaseConfigured() && supabase) {
+          try {
+            await supabase.from('games').upsert(mapGameToSupabaseRow(data.game), { onConflict: 'id' });
+          } catch {}
+        }
         const cached = await fetchAllGames();
         const updated = cached.map(g => g.id === gameId ? data.game : g);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        safeSetLocalStorage(STORAGE_KEY, updated);
         return data.game;
       }
     } else {
@@ -192,7 +375,7 @@ export async function updateGame(
     if (e.message && !e.message.includes('fetch')) throw e;
   }
 
-  // Local fallback
+  // Local + Supabase fallback
   const cached = await fetchAllGames();
   const gameIndex = cached.findIndex(g => g.id === gameId);
   if (gameIndex === -1) throw new Error('Game not found');
@@ -232,6 +415,14 @@ export async function updateGame(
     isDev: true
   });
 
+  if (isSupabaseConfigured() && supabase) {
+    try {
+      await supabase.from('games').upsert(mapGameToSupabaseRow(game), { onConflict: 'id' });
+    } catch (supaErr) {
+      console.warn('Could not update game in Supabase:', supaErr);
+    }
+  }
+
   safeSetLocalStorage(STORAGE_KEY, cached);
   try {
     await saveGameToIndexedDB(game);
@@ -243,7 +434,7 @@ export async function updateGame(
 
 export async function trackGamePlay(gameId: string): Promise<number> {
   try {
-    const res = await fetch(`/api/games/${gameId}/play`, { method: 'POST' });
+    const res = await globalApiFetch(`/api/games/${gameId}/play`, { method: 'POST' });
     if (res.ok) {
       const data = await res.json();
       return data.plays;
@@ -254,7 +445,7 @@ export async function trackGamePlay(gameId: string): Promise<number> {
 
 export async function likeGame(gameId: string): Promise<number> {
   try {
-    const res = await fetch(`/api/games/${gameId}/like`, { method: 'POST' });
+    const res = await globalApiFetch(`/api/games/${gameId}/like`, { method: 'POST' });
     if (res.ok) {
       const data = await res.json();
       return data.likes;
@@ -265,7 +456,7 @@ export async function likeGame(gameId: string): Promise<number> {
 
 export async function addComment(gameId: string, author: string, text: string, rating: number): Promise<GameComment[]> {
   try {
-    const res = await fetch(`/api/games/${gameId}/comments`, {
+    const res = await globalApiFetch(`/api/games/${gameId}/comments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ author, text, rating })
@@ -284,8 +475,18 @@ export async function deleteGame(gameId: string): Promise<boolean> {
     await deleteGameFromIndexedDB(gameId);
   } catch {}
 
+  // Remove from shared Supabase games table if configured
+  const supabase = getSupabaseClient();
+  if (isSupabaseConfigured() && supabase) {
+    try {
+      await supabase.from('games').delete().eq('id', gameId);
+    } catch (supaErr) {
+      console.warn('Could not delete game from Supabase:', supaErr);
+    }
+  }
+
   try {
-    const res = await fetch(`/api/games/${gameId}`, { method: 'DELETE' });
+    const res = await globalApiFetch(`/api/games/${gameId}`, { method: 'DELETE' });
     if (res.ok) {
       const cached = localStorage.getItem(STORAGE_KEY);
       if (cached) {
@@ -316,7 +517,7 @@ export async function deleteGame(gameId: string): Promise<boolean> {
 
 export async function clearAllGames(): Promise<boolean> {
   try {
-    await fetch('/api/games', { method: 'DELETE' });
+    await globalApiFetch('/api/games', { method: 'DELETE' });
   } catch {}
   safeSetLocalStorage(STORAGE_KEY, []);
   try {

@@ -322,4 +322,63 @@ const serverSource = fs.readFileSync('server.ts', 'utf-8');
 assert.ok(serverSource.includes("limit: '100mb'"), 'Server must accept up to 100mb payloads');
 console.log('✓ Verified 100MB payload limit is active on Express server for large games');
 
+// 17. Test Cross-Browser Supabase Game Row Mapping & Sync Contract
+import { mapGameToSupabaseRow, mapSupabaseRowToGame } from '../src/utils/api';
+
+const samplePublishedGame: any = {
+  id: 'game-cross-browser-999',
+  title: 'Nebula Drift Online',
+  slug: 'nebula-drift-online',
+  description: 'Cross-browser synced HTML5 space racer',
+  genre: 'Racing',
+  tags: ['Space', 'Multiplayer'],
+  author: 'Rishi',
+  currentVersion: '1.2.0',
+  versions: [
+    {
+      version: '1.2.0',
+      changelog: 'Cross-browser Supabase sync enabled',
+      code: '<!DOCTYPE html><html><body><canvas id="race"></canvas></body></html>',
+      createdAt: '2026-11-10T16:48:00.000Z',
+      author: 'Rishi'
+    }
+  ],
+  code: '<!DOCTYPE html><html><body><canvas id="race"></canvas></body></html>',
+  type: 'html5',
+  badge: 'new',
+  thumbnailGradient: 'from-blue-950 via-slate-900 to-black',
+  accentColor: '#3b82f6',
+  iconName: 'Gamepad2',
+  likes: 5,
+  plays: 12,
+  rating: 5.0,
+  ratingsCount: 3,
+  comments: [],
+  controls: [{ key: 'WASD', action: 'Steer Ship' }],
+  createdAt: '2026-11-10T16:48:00.000Z',
+  updatedAt: '2026-11-10T16:48:00.000Z'
+};
+
+const supaRow = mapGameToSupabaseRow(samplePublishedGame);
+assert.strictEqual(supaRow.id, 'game-cross-browser-999');
+assert.strictEqual(supaRow.title, 'Nebula Drift Online');
+assert.strictEqual(supaRow.game_data.currentVersion, '1.2.0');
+
+const restoredOnSecondBrowser = mapSupabaseRowToGame(supaRow);
+assert.strictEqual(restoredOnSecondBrowser.id, samplePublishedGame.id);
+assert.strictEqual(restoredOnSecondBrowser.title, samplePublishedGame.title);
+assert.strictEqual(restoredOnSecondBrowser.code, samplePublishedGame.code);
+assert.strictEqual(restoredOnSecondBrowser.author, 'Rishi');
+assert.strictEqual(restoredOnSecondBrowser.likes, 5);
+console.log('✓ Verified cross-browser Supabase game row serialization & restoration');
+
+// 18. Test Global Cloud Backend Routing & Server CORS Support
+import { GLOBAL_BACKEND_URLS } from '../src/utils/api';
+assert.strictEqual(Array.isArray(GLOBAL_BACKEND_URLS), true);
+assert.ok(GLOBAL_BACKEND_URLS.length >= 2, 'Global backend URLs must be configured');
+assert.ok(serverSource.includes("Access-Control-Allow-Origin"), 'Server must enable global CORS headers');
+console.log('✓ Verified global server CORS headers and cross-browser auto-sync routing');
+
 console.log('All tests passed successfully!');
+
+

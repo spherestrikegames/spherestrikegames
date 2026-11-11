@@ -25,6 +25,17 @@ const ai = new GoogleGenAI({
   }
 });
 
+// Enable Global CORS so any browser or static host (e.g. GitHub Pages) across the globe can access the server
+app.use((req: Request, res: Response, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-admin-id, x-admin-passkey');
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+  next();
+});
+
 // Allow large game uploads (HTML/Canvas bundles up to 100MB)
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ extended: true, limit: '100mb' }));
@@ -123,7 +134,7 @@ loadUsers();
 
 // API Routes
 app.get('/api/games', (req: Request, res: Response) => {
-  // Return summarized list or full list
+  loadGames();
   res.json({ success: true, games });
 });
 
@@ -135,7 +146,7 @@ app.get('/api/games/:id', (req: Request, res: Response) => {
   res.json({ success: true, game });
 });
 
-// Upload New Game
+// Upload or Sync New Game Globally
 app.post('/api/games', (req: Request, res: Response) => {
   try {
     const body = req.body;
@@ -153,19 +164,45 @@ app.post('/api/games', (req: Request, res: Response) => {
       });
     }
 
+    const now = new Date().toISOString();
+    const version = body.currentVersion || body.version || '1.0.0';
+    const embedUrl = body.embedUrl ? String(body.embedUrl).trim() : undefined;
+    const code = body.code || (embedUrl ? `<iframe src="${embedUrl}" style="width:100%;height:100%;border:none;" allow="autoplay; fullscreen; gamepad" allowfullscreen></iframe>` : '');
+    const gameType = embedUrl ? 'embed' : (body.type || 'html5');
+
+    // Check if this game already exists (by id or matching title + author) for idempotent global sync
+    const existingIdx = games.findIndex(
+      g => (body.id && g.id === body.id) ||
+           (g.title.trim().toLowerCase() === String(body.title).trim().toLowerCase() &&
+            g.author.trim().toLowerCase() === String(body.author || 'Anonymous Creator').trim().toLowerCase())
+    );
+
+    if (existingIdx !== -1) {
+      const existingGame = games[existingIdx];
+      existingGame.title = body.title || existingGame.title;
+      existingGame.description = body.description || existingGame.description;
+      existingGame.genre = body.genre || existingGame.genre;
+      existingGame.code = code || existingGame.code;
+      existingGame.embedUrl = embedUrl !== undefined ? embedUrl : existingGame.embedUrl;
+      existingGame.type = gameType;
+      if (body.coverImage !== undefined) existingGame.coverImage = body.coverImage;
+      if (Array.isArray(body.tags)) existingGame.tags = body.tags;
+      if (Array.isArray(body.controls)) existingGame.controls = body.controls;
+      existingGame.updatedAt = now;
+      saveGames();
+      return res.status(200).json({ success: true, game: existingGame });
+    }
+
     // Update user gamesCreatedCount if user exists
     if (matchedUser) {
       matchedUser.gamesCreatedCount = (matchedUser.gamesCreatedCount || 0) + 1;
       saveUsers();
     }
 
-    const newId = 'game-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
-    const slug = body.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') + '-' + Date.now().toString(36);
-    const now = new Date().toISOString();
-    const version = body.version || '1.0.0';
-    const embedUrl = body.embedUrl ? String(body.embedUrl).trim() : undefined;
-    const code = body.code || (embedUrl ? `<iframe src="${embedUrl}" style="width:100%;height:100%;border:none;" allow="autoplay; fullscreen; gamepad" allowfullscreen></iframe>` : '');
-    const gameType = embedUrl ? 'embed' : (body.type || 'html5');
+    const newId = (body.id && String(body.id).startsWith('game-'))
+      ? String(body.id)
+      : 'game-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
+    const slug = body.slug || (body.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') + '-' + Date.now().toString(36));
 
     const newGame: Game = {
       id: newId,
@@ -176,15 +213,17 @@ app.post('/api/games', (req: Request, res: Response) => {
       tags: Array.isArray(body.tags) ? body.tags : ['Community', 'Web'],
       author: body.author || 'Anonymous Creator',
       currentVersion: version,
-      versions: [
-        {
-          version: version,
-          changelog: body.changelog || 'Initial community upload.',
-          code: code,
-          createdAt: now,
-          author: body.author || 'Anonymous Creator'
-        }
-      ],
+      versions: Array.isArray(body.versions) && body.versions.length > 0
+        ? body.versions
+        : [
+            {
+              version: version,
+              changelog: body.changelog || 'Initial community upload.',
+              code: code,
+              createdAt: body.createdAt || now,
+              author: body.author || 'Anonymous Creator'
+            }
+          ],
       code: code,
       type: gameType,
       embedUrl: embedUrl,
@@ -193,25 +232,27 @@ app.post('/api/games', (req: Request, res: Response) => {
       thumbnailGradient: body.thumbnailGradient || 'from-blue-950 via-slate-900 to-black',
       accentColor: body.accentColor || '#3b82f6',
       iconName: body.iconName || 'Gamepad2',
-      likes: 1,
-      plays: 0,
-      rating: 5.0,
-      ratingsCount: 1,
-      comments: [
-        {
-          id: 'welcome-' + Date.now(),
-          author: 'Sphere Strike System',
-          text: `Welcome to ${body.title}! Try it out, leave a rating, and share feedback with the developer.`,
-          rating: 5,
-          createdAt: now,
-          likes: 0
-        }
-      ],
+      likes: typeof body.likes === 'number' ? body.likes : 1,
+      plays: typeof body.plays === 'number' ? body.plays : 0,
+      rating: typeof body.rating === 'number' ? body.rating : 5.0,
+      ratingsCount: typeof body.ratingsCount === 'number' ? body.ratingsCount : 1,
+      comments: Array.isArray(body.comments) && body.comments.length > 0
+        ? body.comments
+        : [
+            {
+              id: 'welcome-' + Date.now(),
+              author: 'Sphere Strike System',
+              text: `Welcome to ${body.title}! Try it out, leave a rating, and share feedback with the developer.`,
+              rating: 5,
+              createdAt: now,
+              likes: 0
+            }
+          ],
       controls: body.controls || [
         { key: 'Mouse & Keyboard', action: 'Standard Game Controls' }
       ],
-      featured: false,
-      createdAt: now,
+      featured: Boolean(body.featured),
+      createdAt: body.createdAt || now,
       updatedAt: now
     };
 
