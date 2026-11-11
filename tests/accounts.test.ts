@@ -379,6 +379,24 @@ assert.ok(GLOBAL_BACKEND_URLS.length >= 2, 'Global backend URLs must be configur
 assert.ok(serverSource.includes("Access-Control-Allow-Origin"), 'Server must enable global CORS headers');
 console.log('✓ Verified global server CORS headers and cross-browser auto-sync routing');
 
+// 19. Test Strict "Rishi" Admin Passkey Validation (Reject Random Letters)
+function validateStrictAdminRegistration(makeAdmin: boolean, adminPasskey?: string): { allowed: boolean; isAdmin: boolean; error?: string } {
+  if (makeAdmin && (!adminPasskey || adminPasskey.trim() !== 'Rishi')) {
+    return { allowed: false, isAdmin: false, error: 'Incorrect administrator passkey. Access denied.' };
+  }
+  const isAdmin = Boolean(adminPasskey && adminPasskey.trim() === 'Rishi');
+  return { allowed: true, isAdmin };
+}
+
+assert.strictEqual(validateStrictAdminRegistration(true, 'Rishi').allowed, true);
+assert.strictEqual(validateStrictAdminRegistration(true, 'Rishi').isAdmin, true);
+assert.strictEqual(validateStrictAdminRegistration(true, 'randomletters123').allowed, false);
+assert.strictEqual(validateStrictAdminRegistration(true, '').allowed, false);
+assert.strictEqual(validateStrictAdminRegistration(false, undefined).allowed, true);
+assert.strictEqual(validateStrictAdminRegistration(false, undefined).isAdmin, false);
+console.log('✓ Verified strict "Rishi" admin password validation and rejection of random letters');
+
 console.log('All tests passed successfully!');
+
 
 

@@ -589,6 +589,7 @@ function isCallerAdmin(req: Request): boolean {
     const rawKey = String(adminPasskey).trim();
     const cleanKey = rawKey.toLowerCase().replace(/[\s\-_.@]/g, '');
     if (
+      rawKey === 'Rishi' ||
       rawKey === 'goyal.rishi' || 
       cleanKey === 'goyalrishi' || 
       cleanKey === 'macbookair'
@@ -634,25 +635,21 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
       return res.status(400).json({ success: false, message: 'Username must be at least 2 characters.' });
     }
 
+    const rawPasskey = adminPasskey ? String(adminPasskey).trim() : '';
+    if (makeAdmin && rawPasskey !== 'Rishi') {
+      return res.status(403).json({
+        success: false,
+        message: 'Incorrect administrator passkey. Access denied.'
+      });
+    }
+
     const hasProvidedEmail = Boolean(email && String(email).trim().includes('@'));
     const cleanEmail = hasProvidedEmail
       ? String(email).trim().toLowerCase()
       : `${cleanUsername.toLowerCase().replace(/[^a-z0-9_-]/g, '')}_${Date.now().toString(36)}@player.local`;
 
     const userPassword = String(password || 'SpherePlayer2026').trim();
-
-    const rawPasskey = adminPasskey ? String(adminPasskey).trim() : '';
-    const passkeyNormalized = adminPasskey ? String(adminPasskey).replace(/[\s\-_.@]/g, '').toLowerCase() : '';
-    const isOwnerTag = cleanUsername.toLowerCase() === 'rishi_admin' || cleanUsername.toLowerCase() === 'rishi';
-    const isOwnerPwd = userPassword.toLowerCase() === 'macbookair' || userPassword.toLowerCase() === 'goyal_rishi';
-    const isAdminRequested = Boolean(
-      rawPasskey === 'goyal.rishi' ||
-      passkeyNormalized === 'goyalrishi' ||
-      passkeyNormalized === 'macbookair' ||
-      isOwnerTag ||
-      isOwnerPwd ||
-      makeAdmin
-    );
+    const isAdminRequested = Boolean(rawPasskey === 'Rishi');
 
     const now = new Date().toISOString();
 
@@ -668,17 +665,12 @@ app.post('/api/auth/register', (req: Request, res: Response) => {
                        existingPwd === userPassword || 
                        existingPwd.toLowerCase() === userPassword.toLowerCase();
 
-      const isOwnerOrAdmin = isAdminRequested || 
-                             isOwnerTag || 
-                             isOwnerPwd || 
-                             rawPasskey === 'goyal.rishi';
-
-      if (pwdMatch || isOwnerOrAdmin) {
+      if (pwdMatch) {
         existing.lastLoginAt = now;
         if (userPassword) {
           existing.password = userPassword;
         }
-        if (isAdminRequested || isOwnerOrAdmin) {
+        if (isAdminRequested) {
           existing.isAdmin = true;
           existing.role = 'admin';
           existing.aiRiskCategory = 'Clean Verified Administrator';

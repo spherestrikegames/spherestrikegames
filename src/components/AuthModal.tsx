@@ -51,6 +51,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         setErrorMsg('Please choose a password (at least 3 characters).');
         return;
       }
+      if (isAdminRegister && adminPasskey.trim() !== 'Rishi') {
+        setErrorMsg('Incorrect administrator passkey. Access denied.');
+        return;
+      }
+
       const safeEmail = email.trim() && email.includes('@')
         ? email.trim()
         : `${cleanUser.toLowerCase().replace(/[^a-z0-9_-]/g, '')}_${Date.now().toString(36)}@player.local`;
@@ -62,7 +67,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           cleanUser, 
           safeEmail, 
           safePassword, 
-          adminPasskey.trim() || undefined,
+          isAdminRegister ? adminPasskey.trim() : undefined,
           isAdminRegister
         );
         try {

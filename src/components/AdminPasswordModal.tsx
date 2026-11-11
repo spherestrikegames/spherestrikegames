@@ -31,30 +31,7 @@ export const AdminPasswordModal: React.FC<AdminPasswordModalProps> = ({
     setError(null);
 
     try {
-      // Clean string check against approved admin passkeys
-      const cleanKey = password.trim().toLowerCase().replace(/[\s\-_.@]/g, '');
-      const isKnownPasskey = ['goyalrishi', 'rishiadmin', 'macbookair'].includes(cleanKey);
-
-      let isVerified = isKnownPasskey;
-
-      if (!isVerified) {
-        // Also query the secret accounts clearance endpoint as fallback verification
-        try {
-          const res = await fetch('/api/auth/secret-accounts-clearance', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ passkey: password.trim() })
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.valid || data.success) {
-              isVerified = true;
-            }
-          }
-        } catch {
-          // Fall back to cleanKey validation
-        }
-      }
+      const isVerified = password.trim() === 'Rishi';
 
       if (isVerified) {
         setSuccessAnim(true);

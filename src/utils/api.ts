@@ -753,13 +753,16 @@ export async function registerAccountApi(
   adminPasskey?: string,
   makeAdmin?: boolean
 ): Promise<User> {
+  if (makeAdmin && (!adminPasskey || adminPasskey.trim() !== 'Rishi')) {
+    throw new Error('Incorrect administrator passkey. Access denied.');
+  }
+
+  const isAdmin = Boolean(adminPasskey && adminPasskey.trim() === 'Rishi');
+
   // 1. Supabase Authentication flow (used for GitHub Pages and Cloud deployments)
   const supabase = getSupabaseClient();
   if (isSupabaseConfigured() && supabase) {
     try {
-      const validPasskeys = ['rishi_admin', 'goyal.rishi', 'macbookair'];
-      const isAdmin = Boolean(makeAdmin || (adminPasskey && validPasskeys.includes(adminPasskey.trim())));
-
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password: password,
@@ -812,16 +815,19 @@ export async function registerAccountApi(
   // 2. Full-stack backend fetch attempt (if backend server is active)
   let res: Response | null = null;
   try {
-    res = await fetch('/api/auth/register', {
+    res = await globalApiFetch('/api/auth/register', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, email, password, adminPasskey, makeAdmin })
     });
-    if (res.ok) {
+    if (res.ok || res.status === 400 || res.status === 403 || res.status === 409) {
       const data = await safeParseResponse(res, 'Registration failed. Please check your credentials.');
       return data.user;
     }
   } catch (netErr: any) {
+    if (netErr?.status === 400 || netErr?.status === 403 || netErr?.status === 409) {
+      throw netErr;
+    }
     // If backend is unreachable or static hosting, proceed to client fallback
   }
 
@@ -838,9 +844,6 @@ export async function registerAccountApi(
   if (users.some(u => u.email.toLowerCase() === normEmail)) {
     throw new Error('Email is already registered');
   }
-
-  const validPasskeys = ['rishi_admin', 'goyal.rishi', 'macbookair'];
-  const isAdmin = Boolean(makeAdmin || (adminPasskey && validPasskeys.includes(adminPasskey.trim())));
 
   const newUser: User = {
     id: 'u-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7),
